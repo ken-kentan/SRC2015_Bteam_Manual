@@ -15,12 +15,11 @@
 
 #include "utils/MadgwickAHRS.h"
 
+#include "machine/machine.h"
+
 using namespace stm32plus;
 
 /* Defines -------------------------------------------------------------------*/
-#ifndef M_PI
-#define M_PI 3.1415926535
-#endif
 
 #define RAD_TO_DEG (180/M_PI)
 
@@ -28,9 +27,8 @@ using namespace stm32plus;
 float yaw_now, yaw_old, yaw_value;
 float yaw, pitch, roll;
 
-int X_raw = 0, Y_raw = 0, X_v = 0, Y_v = 0, rotation = 0,rotation_sub, A_out = 0, B_out = 0,
-		C_out = 0, X_encoder, Y_encoder, X_encoder_now, Y_encoder_now,
-		X_encoder_old, Y_encoder_old, X_encoder_BASE, Y_encoder_BASE;
+int X_raw = 0, Y_raw = 0, X_v = 0, Y_v = 0, rotation = 0, rotation_sub, A_out =
+		0, B_out = 0, C_out = 0;
 
 float X_100, Y_100, A_v = 0, B_v = 0, C_v = 0;
 
@@ -95,13 +93,8 @@ private:
 	Timer6<Timer6InternalClockFeature, Timer6InterruptFeature> timer;
 };
 
-/**************************************************************************/
-/*!
- @brief  Main Program.
- @param  None.
- @retval None.
- */
-/**************************************************************************/
+
+int motorDriver_Protecter();
 
 int main(void) {
 
@@ -114,16 +107,6 @@ int main(void) {
 	SpiMotor spimotor(*mainBoard.spi3v1, 0);
 
 	MillisecondTimer::delay(100);
-
-	/*
-	CanAir canair(&mainBoard.can);
-
-	canair.Set(0);
-	canair.Update();
-	MillisecondTimer::delay(1000);
-	canair.Reset(0);
-	canair.Update();
-	*/
 
 	PS3Con *ps3con = new PS3Con();
 
@@ -143,19 +126,21 @@ int main(void) {
 
 	SensorTimer sensor_timer(&mainBoard);
 
-
 	while (1) {
 		mainBoard.can.Update();
 		mainBoard.led.On();
 
-		float q[4];
-		sensor_timer.ahrs.getQuaternion(q);
-
-		char str[128];
+		//float q[4];
+		//sensor_timer.ahrs.getQuaternion(q);
 
 		sensor_timer.ahrs.getYawPitchRoll(yaw, pitch, roll);
 
-		if (ps3con->getButtonPress(CIRCLE)) sensor_timer.ahrs.resetYaw();
+		if (ps3con->getButtonPress(CIRCLE)) {
+			for(int i;i<=2;i++){
+			sensor_timer.acc[i] = 0;
+			sensor_timer.gyr[i] = 0;
+			}
+		}
 
 		yaw_now = yaw * RAD_TO_DEG;
 
@@ -163,8 +148,10 @@ int main(void) {
 			yaw_value += yaw_now - yaw_old;
 
 		rotation_sub = yaw_value * 20;
-		if(rotation_sub > 100)rotation_sub = 100;
-		if(rotation_sub < -100)rotation_sub = -100;
+		if (rotation_sub > 100)
+			rotation_sub = 100;
+		if (rotation_sub < -100)
+			rotation_sub = -100;
 
 		if (ps3con->getButtonPress(R1)) {
 			if (rotation < 200)
@@ -226,11 +213,14 @@ int main(void) {
 		else
 			C_out--;
 
+		//char str[128];
 		//sprintf(str, "YPR: %d %.5f %.5f\r\n", (int) yaw_value,
-				//pitch * RAD_TO_DEG, roll * RAD_TO_DEG);
-		//sprintf(str, "YPR: %.5f\r\n", yaw_value);
+		//pitch * RAD_TO_DEG, roll * RAD_TO_DEG);
+		//sprintf(str, "YPR: %.5f %.5f\r\n", sensor_timer.angular_velocity[0],sensor_timer.acc[0]);
 
 		//debug << str;
+
+		motorDriver_Protecter();
 
 		mainBoard.motorA.setOutput(A_out / 500.0);
 		mainBoard.motorB.setOutput(B_out / 500.0);
@@ -241,6 +231,20 @@ int main(void) {
 		MillisecondTimer::delay(2);
 	}
 
+}
+
+int motorDriver_Protecter(){
+	if(A_out < 5 && A_out > -5)A_out = 0;
+	if(B_out < 5 && B_out > -5)B_out = 0;
+	if(C_out < 5 && C_out > -5)C_out = 0;
+	if(A_out > 500)A_out = 500;
+	if(B_out > 500)B_out = 500;
+	if(C_out > 500)C_out = 500;
+	if(A_out < -500)A_out = -500;
+	if(B_out < -500)B_out = -500;
+	if(C_out < -500)C_out = -500;
+
+	return 0;
 }
 
 /* End Of File ---------------------------------------------------------------*/
