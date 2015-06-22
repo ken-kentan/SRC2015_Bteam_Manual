@@ -132,15 +132,14 @@ int main(void) {
 
 		//float q[4];
 		//sensor_timer.ahrs.getQuaternion(q);
-
-		sensor_timer.ahrs.getYawPitchRoll(yaw, pitch, roll);
-
 		if (ps3con->getButtonPress(CIRCLE)) {
 			for(int i;i<=2;i++){
-			sensor_timer.acc[i] = 0;
-			sensor_timer.gyr[i] = 0;
+				sensor_timer.acc[i] = 0;
+				sensor_timer.gyr[i] = 0;
 			}
 		}
+
+		sensor_timer.ahrs.getYawPitchRoll(yaw, pitch, roll);
 
 		yaw_now = yaw * RAD_TO_DEG;
 
@@ -234,6 +233,7 @@ int main(void) {
 }
 
 int motorDriver_Protecter(){
+
 	if(A_out < 5 && A_out > -5)A_out = 0;
 	if(B_out < 5 && B_out > -5)B_out = 0;
 	if(C_out < 5 && C_out > -5)C_out = 0;
