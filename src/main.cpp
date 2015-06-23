@@ -94,7 +94,7 @@ private:
 };
 
 
-int motorDriver_Protecter();
+int motorDriver_Protecter(float IN_out);
 
 int main(void) {
 
@@ -184,8 +184,8 @@ int main(void) {
 		X_100 = (X_raw - 127.5) * 0.7843;
 		Y_100 = (Y_raw - 127.5) * 0.7843;
 
-		X_100 *= 3;
-		Y_100 *= 3;
+		X_100 *= 2;
+		Y_100 *= 2;
 
 		if (X_100 < 10 && X_100 > -10)
 			X_100 = 0;
@@ -212,18 +212,20 @@ int main(void) {
 		else
 			C_out--;
 
-		//char str[128];
-		//sprintf(str, "YPR: %d %.5f %.5f\r\n", (int) yaw_value,
-		//pitch * RAD_TO_DEG, roll * RAD_TO_DEG);
+		char str[128];
+		sprintf(str, "YPR: %d %.5f %.5f\r\n", (int) yaw_value,pitch * RAD_TO_DEG, roll * RAD_TO_DEG);
 		//sprintf(str, "YPR: %.5f %.5f\r\n", sensor_timer.angular_velocity[0],sensor_timer.acc[0]);
 
-		//debug << str;
+		debug << str;
 
-		motorDriver_Protecter();
+		A_out = motorDriver_Protecter(A_out);
+		B_out = motorDriver_Protecter(B_out);
+		C_out = motorDriver_Protecter(C_out);
 
 		mainBoard.motorA.setOutput(A_out / 500.0);
 		mainBoard.motorB.setOutput(B_out / 500.0);
 		mainBoard.motorC.setOutput(C_out / 500.0);
+		mainBoard.motorD.setOutput(C_out / 500.0);
 
 		yaw_old = yaw_now;
 
@@ -232,19 +234,12 @@ int main(void) {
 
 }
 
-int motorDriver_Protecter(){
+int motorDriver_Protecter(float IN_out){
+	if(IN_out < 5 && IN_out > -5)IN_out = 0;
+	if(IN_out > 500)IN_out = 500;
+	if(IN_out < -500)IN_out = -500;
 
-	if(A_out < 5 && A_out > -5)A_out = 0;
-	if(B_out < 5 && B_out > -5)B_out = 0;
-	if(C_out < 5 && C_out > -5)C_out = 0;
-	if(A_out > 500)A_out = 500;
-	if(B_out > 500)B_out = 500;
-	if(C_out > 500)C_out = 500;
-	if(A_out < -500)A_out = -500;
-	if(B_out < -500)B_out = -500;
-	if(C_out < -500)C_out = -500;
-
-	return 0;
+	return IN_out;
 }
 
 /* End Of File ---------------------------------------------------------------*/
