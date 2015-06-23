@@ -93,8 +93,8 @@ private:
 	Timer6<Timer6InternalClockFeature, Timer6InterruptFeature> timer;
 };
 
-
 int motorDriver_Protecter(float IN_out);
+int ps3Analog_ValueChanger(float IN_100);
 
 int main(void) {
 
@@ -133,7 +133,7 @@ int main(void) {
 		//float q[4];
 		//sensor_timer.ahrs.getQuaternion(q);
 		if (ps3con->getButtonPress(CIRCLE)) {
-			for(int i;i<=2;i++){
+			for (int i; i <= 2; i++) {
 				sensor_timer.acc[i] = 0;
 				sensor_timer.gyr[i] = 0;
 			}
@@ -175,31 +175,21 @@ int main(void) {
 				rotation += 1;
 		}
 
-		A_v = 0;
-		B_v = 0;
-		C_v = 0;
 		X_raw = ps3con->getAnalog(ANALOG_L_X);
 		Y_raw = ps3con->getAnalog(ANALOG_L_Y);
+		X_100 = ps3Analog_ValueChanger(X_raw);
+		Y_100 = ps3Analog_ValueChanger(Y_raw);
 
-		X_100 = (X_raw - 127.5) * 0.7843;
-		Y_100 = (Y_raw - 127.5) * 0.7843;
-
-		X_100 *= 2;
-		Y_100 *= 2;
-
-		if (X_100 < 10 && X_100 > -10)
-			X_100 = 0;
-		if (Y_100 < 10 && Y_100 > -10)
-			Y_100 = 0;
+		A_v, B_v, C_v = 0;
 
 		//motor
 		A_v = (int) Y_100 * -1 + (int) X_100 / 2 + rotation + rotation_sub;
 		B_v = (int) Y_100 + (int) X_100 / 2 + rotation + rotation_sub;
 		C_v = (int) X_100 * -1 + rotation + rotation_sub;
 
-		if (A_out < A_v)
+		if (A_out < A_v) {
 			A_out++;
-		else
+		} else
 			A_out--;
 
 		if (B_out < B_v)
@@ -213,7 +203,8 @@ int main(void) {
 			C_out--;
 
 		char str[128];
-		sprintf(str, "YPR: %d %.5f %.5f\r\n", (int) yaw_value,pitch * RAD_TO_DEG, roll * RAD_TO_DEG);
+		sprintf(str, "YPR: %d %.5f %.5f\r\n", (int) yaw_value,
+				pitch * RAD_TO_DEG, roll * RAD_TO_DEG);
 		//sprintf(str, "YPR: %.5f %.5f\r\n", sensor_timer.angular_velocity[0],sensor_timer.acc[0]);
 
 		debug << str;
@@ -234,10 +225,25 @@ int main(void) {
 
 }
 
-int motorDriver_Protecter(float IN_out){
-	if(IN_out < 5 && IN_out > -5)IN_out = 0;
-	if(IN_out > 500)IN_out = 500;
-	if(IN_out < -500)IN_out = -500;
+int ps3Analog_ValueChanger(float IN_100) {
+
+	IN_100 = (IN_100 - 127.5) * 0.7843;
+	IN_100 *= 2;
+
+	if (IN_100 < 10 && IN_100 > -10)
+		IN_100 = 0;
+
+	return IN_100;
+}
+
+int motorDriver_Protecter(float IN_out) {
+
+	if (IN_out < 3 && IN_out > -3)
+		IN_out = 0;
+	if (IN_out > 500)
+		IN_out = 500;
+	if (IN_out < -500)
+		IN_out = -500;
 
 	return IN_out;
 }
