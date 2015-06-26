@@ -26,9 +26,7 @@ using namespace stm32plus;
 float yaw_now, yaw_old, yaw_value;
 float yaw, pitch, roll;
 
-int X_raw, Y_raw, X_v, Y_v, rotation, rotation_sub,A_out = 0, B_out, C_out;
-
-float X_100, Y_100, A_v, B_v, C_v;
+int X_raw, Y_raw, X_v, Y_v, rotation, rotation_sub,A_out = 0, B_out, C_out, A_v, B_v, C_v,X_100, Y_100;
 
 int16_t acc[3] = { 0 };
 int16_t gyr[3] = { 0 };
@@ -215,7 +213,7 @@ int main(void) {
 		//sprintf(str, "YPR: %d %.5f %.5f\r\n", (int) yaw_value,
 		//pitch * RAD_TO_DEG, roll * RAD_TO_DEG
 		//);
-		sprintf(str, "Motor out: %.5f %.5f %.5f %.5f\r\n", A_v, A_out,(float)motorDriver_Protecter(A_out), X_100);
+		sprintf(str, "Motor out: %.5f %.5f %.5f %.5f\r\n", (float)A_v, (float)A_out,(float)motorDriver_Protecter(A_out), (float)X_100);
 
 		debug << str;
 
@@ -232,7 +230,7 @@ int ps3Analog_ValueChanger(float IN_100) {
 	if (IN_100 < 10 && IN_100 > -10)
 		IN_100 = 0;
 
-	return IN_100;
+	return (int)IN_100;
 }
 
 int motorDriver_Protecter(int IN_out) {
