@@ -11,7 +11,6 @@
 #include "devices/spimotor.h"
 
 #include "devices/can/ps3con.h"
-#include "devices/can/canair.h"
 
 #include "utils/MadgwickAHRS.h"
 
@@ -27,10 +26,12 @@ using namespace stm32plus;
 float yaw_now, yaw_old, yaw_value;
 float yaw, pitch, roll;
 
-int X_raw = 0, Y_raw = 0, X_v = 0, Y_v = 0, rotation = 0, rotation_sub, A_out =
-		0, B_out = 0, C_out = 0;
+int X_raw, Y_raw, X_v, Y_v, rotation, rotation_sub,A_out = 0, B_out, C_out;
 
-float X_100, Y_100, A_v = 0, B_v = 0, C_v = 0;
+float X_100, Y_100, A_v, B_v, C_v;
+
+int16_t acc[3] = { 0 };
+int16_t gyr[3] = { 0 };
 
 /* Constants -----------------------------------------------------------------*/
 
@@ -43,10 +44,6 @@ public:
 	MainV3 *mainBoard;
 	MadgwickAHRS ahrs;
 
-	float yaw, pitch, roll;
-
-	int16_t acc[3] = { 0 };
-	int16_t gyr[3] = { 0 };
 	float angular_velocity[3], linear_acceleration[3];
 
 	SensorTimer(MainV3 *_mainBoard) :
@@ -93,7 +90,15 @@ private:
 	Timer6<Timer6InternalClockFeature, Timer6InterruptFeature> timer;
 };
 
-int motorDriver_Protecter(float IN_out);
+/**************************************************************************/
+/*!
+ @brief  Main Program.
+ @param  None.
+ @retval None.
+ */
+/**************************************************************************/
+
+int motorDriver_Protecter(int IN_out);
 int ps3Analog_ValueChanger(float IN_100);
 
 int main(void) {
@@ -104,7 +109,6 @@ int main(void) {
 	Nvic::initialise();
 
 	MainV3 mainBoard;
-	SpiMotor spimotor(*mainBoard.spi3v1, 0);
 
 	MillisecondTimer::delay(100);
 
@@ -114,15 +118,10 @@ int main(void) {
 
 	mainBoard.mpu6050.setTimeout(20);
 
-	debug << "Testing MPU6050...\r\n";
 	while (!mainBoard.mpu6050.test())
 		;
-	debug << "MPU6050 test passed.\r\n";
-
-	debug << "Setting up MPU6050...\r\n";
 	mainBoard.mpu6050.setup();
 	mainBoard.mpu6050.setGyrRange(mainBoard.mpu6050.GYR_RANGE_500DPS);
-	debug << "complete.\r\n";
 
 	SensorTimer sensor_timer(&mainBoard);
 
@@ -134,8 +133,8 @@ int main(void) {
 		//sensor_timer.ahrs.getQuaternion(q);
 		if (ps3con->getButtonPress(CIRCLE)) {
 			for (int i; i <= 2; i++) {
-				sensor_timer.acc[i] = 0;
-				sensor_timer.gyr[i] = 0;
+				acc[i] = 0;
+				gyr[i] = 0;
 			}
 		}
 
@@ -180,7 +179,7 @@ int main(void) {
 		X_100 = ps3Analog_ValueChanger(X_raw);
 		Y_100 = ps3Analog_ValueChanger(Y_raw);
 
-		A_v, B_v, C_v = 0;
+		A_v = B_v = C_v = 0;
 
 		//motor
 		A_v = (int) Y_100 * -1 + (int) X_100 / 2 + rotation + rotation_sub;
@@ -202,25 +201,25 @@ int main(void) {
 		else
 			C_out--;
 
-		char str[128];
-		sprintf(str, "YPR: %d %.5f %.5f\r\n", (int) yaw_value,
-				pitch * RAD_TO_DEG, roll * RAD_TO_DEG);
-		//sprintf(str, "YPR: %.5f %.5f\r\n", sensor_timer.angular_velocity[0],sensor_timer.acc[0]);
-
-		debug << str;
-
 		A_out = motorDriver_Protecter(A_out);
 		B_out = motorDriver_Protecter(B_out);
 		C_out = motorDriver_Protecter(C_out);
 
-		mainBoard.motorA.setOutput(A_out / 500.0);
-		mainBoard.motorB.setOutput(B_out / 500.0);
-		mainBoard.motorC.setOutput(C_out / 500.0);
-		mainBoard.motorD.setOutput(C_out / 500.0);
+		//mainBoard.motorA.setOutput((float)A_out / 500.0);
+		//mainBoard.motorB.setOutput((float)B_out / 500.0);
+		//mainBoard.motorC.setOutput((float)C_out / 500.0);
 
 		yaw_old = yaw_now;
 
-		MillisecondTimer::delay(2);
+		char str[128];
+		//sprintf(str, "YPR: %d %.5f %.5f\r\n", (int) yaw_value,
+		//pitch * RAD_TO_DEG, roll * RAD_TO_DEG
+		//);
+		sprintf(str, "Motor out: %.5f %.5f %.5f %.5f\r\n", A_v, A_out,(float)motorDriver_Protecter(A_out), X_100);
+
+		debug << str;
+
+		MillisecondTimer::delay(50);
 	}
 
 }
@@ -236,7 +235,7 @@ int ps3Analog_ValueChanger(float IN_100) {
 	return IN_100;
 }
 
-int motorDriver_Protecter(float IN_out) {
+int motorDriver_Protecter(int IN_out) {
 
 	if (IN_out < 3 && IN_out > -3)
 		IN_out = 0;
