@@ -262,11 +262,17 @@ public:
 		q[3] = q3;
 	}
 
+/*
 	void getYawPitchRoll(float &yaw, float &pitch, float &roll) {
 		roll = atan2(2 * q2 * q0 - 2 * q1 * q3, 1 - 2 * q2 * q2 - 2 * q3 * q3);
 		pitch = atan2(2 * q1 * q0 - 2 * q2 * q3, 1 - 2 * q1 * q1 - 2 * q3 * q3);
 		yaw = asin(2 * q1 * q2 + 2 * q3 * q0);
 	}
+*/
+	//only yaw , customed by kentaro doi
+	void getYawPitchRoll(float &yaw) {
+			yaw = asin(2 * q1 * q2 + 2 * q3 * q0);
+		}
 
 	void resetYaw() {
 		q0 = 1.0f;
