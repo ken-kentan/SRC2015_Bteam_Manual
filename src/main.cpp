@@ -5,23 +5,20 @@
 #include "config/gpio.h"
 #include "config/timing.h"
 #include "utils/debug.h"
-
 #include "board/main_v3.h"
-
 #include "devices/spimotor.h"
-
 #include "devices/can/ps3con.h"
-
 #include "machine/machine.h"
 
 using namespace stm32plus;
+
 
 /* Defines -------------------------------------------------------------------*/
 
 #define RAD_TO_DEG (180/M_PI)
 
 /* Variables -----------------------------------------------------------------*/
-float yaw_now = 0, yaw_old = 0, yaw_value = 0, rotation = 0;
+float yaw_now = 0, yaw_old = 0, yaw_value = 0, yaw_reset = 0, rotation = 0;
 
 int A_out = 0, B_out = 0, C_out = 0;
 
@@ -30,49 +27,6 @@ int A_out = 0, B_out = 0, C_out = 0;
 /* Function prototypes -------------------------------------------------------*/
 
 /* Functions -----------------------------------------------------------------*/
-
-class SensorTimer {
-public:
-	MainV3 *mainBoard;
-	MadgwickAHRS ahrs;
-
-	float yaw = 0;
-
-	int16_t acc[3] = { 0 };
-	int16_t gyr[3] = { 0 };
-	float angular_velocity;
-
-	SensorTimer(MainV3 *_mainBoard) :
-			ahrs() {
-		mainBoard = _mainBoard;
-
-		timer.setTimeBaseByFrequency(10000, 100);
-		// 割り込みハンドラをバインド
-		timer.TimerInterruptEventSender.insertSubscriber(
-				TimerInterruptEventSourceSlot::bind(this,
-						&SensorTimer::onInterrupt));
-		timer.setNvicPriorities(1, 0);
-		timer.enableInterrupts(TIM_IT_Update); // オーバーフロー割り込み有効化
-		timer.enablePeripheral();
-	}
-
-	// 割り込みハンドラ
-	void onInterrupt(TimerEventType tet, uint8_t timerNumber) {
-		// オーバーフロー割り込みの場合
-		if (tet == TimerEventType::EVENT_UPDATE) {
-
-			mainBoard->mpu6050.readGyrAll(gyr);
-			angular_velocity = (float) gyr[2] / 32768.0f * 500.0f
-					* (M_PI / 180.0f);
-
-			yaw += angular_velocity;
-
-		}
-	}
-private:
-	int count = 0;
-	Timer6<Timer6InternalClockFeature, Timer6InterruptFeature> timer;
-};
 
 /**************************************************************************/
 /*!
@@ -116,17 +70,18 @@ int main(void) {
 		mainBoard.can.Update();
 		mainBoard.led.On();
 
-		//float q[4];
-		//sensor_timer.ahrs.getQuaternion(q);
-		if (ps3con->getButtonPress(CIRCLE)) {
-		}
-
 		yaw_now = sensor_timer.yaw;
+		//sensor_timer.ahrs.getYawPitchRoll(yaw_now);
 
 		if (yaw_now - yaw_old > 0.05 || yaw_now - yaw_old < -0.05) {
 			yaw_value += yaw_now - yaw_old;
 		}
-		rotation_sub = yaw_value * 10;
+		rotation_sub = (yaw_value - yaw_reset) * 10;
+		if (ps3con->getButtonPress(CIRCLE)) {
+			yaw_reset = yaw_value;
+			rotation_sub = 0;
+		}
+
 
 		if (rotation_sub > 100)
 			rotation_sub = 100;
@@ -163,7 +118,7 @@ int main(void) {
 
 		A_v = B_v = C_v = 0;
 
-		//motor
+		//moto
 		A_v = Y_100 * -1 + X_100 / 2 + rotation + rotation_sub;
 		B_v = Y_100 + X_100 / 2 + rotation + rotation_sub;
 		C_v = X_100 * -1 + rotation + rotation_sub;
@@ -181,8 +136,9 @@ int main(void) {
 		mainBoard.motorC.setOutput((float) C_out / 500.0);
 
 		yaw_old = yaw_now;
-		/*
+/*
 		 char str[128];
+
 		 //sprintf(str, "YPR: %d %.5f %.5f\r\n", (int) yaw_value,
 		 //pitch * RAD_TO_DEG, roll * RAD_TO_DEG
 		 //);
@@ -190,9 +146,9 @@ int main(void) {
 		 (float) A_out, (float) C_out, (float) yaw_value,
 		 (float) sensor_timer.yaw);
 
+		 sprintf(str,"%.5f %.5f \r\n",yaw_now ,yaw_value);
 		 debug << str;
-		 */
-
+*/
 		MillisecondTimer::delay(50);
 	}
 
@@ -201,7 +157,7 @@ int main(void) {
 int ps3Analog_ValueChanger(int IN_100) {
 
 	IN_100 = (IN_100 - 127.5) * 0.7843;
-	IN_100 *= 2;
+	IN_100 *= 3;
 
 	if (IN_100 < 10 && IN_100 > -10)
 		IN_100 = 0;

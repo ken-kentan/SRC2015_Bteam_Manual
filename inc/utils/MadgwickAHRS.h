@@ -1,5 +1,5 @@
 /*
- * MadgwickAHRS.h
+ * MadgwickAHRSK.h
  *
  *  Created on: 2014/12/09
  *      Author: spiralray
@@ -271,7 +271,7 @@ public:
 */
 	//only yaw , customed by kentaro doi
 	void getYawPitchRoll(float &yaw) {
-			yaw = asin(2 * q1 * q2 + 2 * q3 * q0);
+			yaw = atan2(2.0*(q1*q2 + q3*q0), q3*q3 - q0*q0 - q1*q1 + q2*q2);
 		}
 
 	void resetYaw() {
