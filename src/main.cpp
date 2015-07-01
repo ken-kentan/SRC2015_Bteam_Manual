@@ -12,13 +12,14 @@
 
 using namespace stm32plus;
 
-
 /* Defines -------------------------------------------------------------------*/
 
 #define RAD_TO_DEG (180/M_PI)
 
 /* Variables -----------------------------------------------------------------*/
 float yaw_now = 0, yaw_old = 0, yaw_value = 0, yaw_reset = 0, rotation = 0;
+
+float targetX = 0, targetY = 0;
 
 int A_out = 0, B_out = 0, C_out = 0;
 
@@ -40,6 +41,9 @@ int motorDriver_Protecter(int IN_out);
 int ps3Analog_ValueChanger(int IN_100);
 
 int main(void) {
+	float encoderX = 0, encoderY = 0;
+	float encoderX_now = 0, encoderX_old = 0, encoderY_now = 0,
+			encoderY_old = 0;
 
 	//Initialise Systick
 	MillisecondTimer::initialise();
@@ -70,6 +74,25 @@ int main(void) {
 		mainBoard.can.Update();
 		mainBoard.led.On();
 
+		encoderX_now = mainBoard.encoders.getCounter1();
+		encoderY_now = mainBoard.encoders.getCounter2();
+
+		if (encoderX_now - encoderX_old < 500
+				&& encoderX_now - encoderX_old > -500) {
+			encoderX += encoderX_now - encoderX_old;
+
+		}
+		if (encoderY_now - encoderY_old < 500
+				&& encoderY_now - encoderY_old > -500) {
+			encoderY += encoderY_now - encoderY_old;
+
+		}
+
+		if (ps3con->getButtonPress(TRIANGLE)) {
+			targetX = encoderX;
+			targetY = encoderY;
+		}
+
 		yaw_now = sensor_timer.yaw;
 		//sensor_timer.ahrs.getYawPitchRoll(yaw_now);
 
@@ -81,7 +104,6 @@ int main(void) {
 			yaw_reset = yaw_value;
 			rotation_sub = 0;
 		}
-
 
 		if (rotation_sub > 100)
 			rotation_sub = 100;
@@ -116,6 +138,25 @@ int main(void) {
 		X_100 = ps3Analog_ValueChanger(X_raw);
 		Y_100 = ps3Analog_ValueChanger(Y_raw);
 
+		if (ps3con->getButtonPress(CROSS)) {
+			if (targetX - encoderX >= 100 || targetX - encoderX <= -100) {
+				if (targetX < encoderX) {
+					X_100 = 100;
+				}
+				if (targetX > encoderX) {
+					X_100 = -100;
+				}
+			}
+			if (targetY - encoderY >= 100 || targetY - encoderY <= -100) {
+				if (targetY < encoderY) {
+					Y_100 = -100;
+				}
+				if (targetY > encoderY) {
+					Y_100 = 100;
+				}
+			}
+		}
+
 		A_v = B_v = C_v = 0;
 
 		//moto
@@ -136,19 +177,22 @@ int main(void) {
 		mainBoard.motorC.setOutput((float) C_out / 500.0);
 
 		yaw_old = yaw_now;
-/*
-		 char str[128];
 
-		 //sprintf(str, "YPR: %d %.5f %.5f\r\n", (int) yaw_value,
-		 //pitch * RAD_TO_DEG, roll * RAD_TO_DEG
-		 //);
-		 sprintf(str, "Motor out: %.5f %.5f %.5f %.5f %.5f\r\n", (float) B_out,
-		 (float) A_out, (float) C_out, (float) yaw_value,
-		 (float) sensor_timer.yaw);
+		encoderX_old = encoderX_now;
+		encoderY_old = encoderY_now;
 
-		 sprintf(str,"%.5f %.5f \r\n",yaw_now ,yaw_value);
-		 debug << str;
-*/
+		char str[128];
+
+		//sprintf(str, "YPR: %d %.5f %.5f\r\n", (int) yaw_value,
+		//pitch * RAD_TO_DEG, roll * RAD_TO_DEG
+		//);
+		//sprintf(str, "Motor out: %.5f %.5f %.5f %.5f %.5f\r\n", (float) B_out,
+		//(float) A_out, (float) C_out, (float) yaw_value,
+		//(float) sensor_timer.yaw);
+
+		sprintf(str, "%.5f %.5f %.5f\r\n", encoderX, encoderY, X_100);
+		debug << str;
+
 		MillisecondTimer::delay(50);
 	}
 
