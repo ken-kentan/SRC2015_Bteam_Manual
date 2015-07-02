@@ -105,10 +105,10 @@ int main(void) {
 			rotation_sub = 0;
 		}
 
-		if (rotation_sub > 100)
-			rotation_sub = 100;
-		if (rotation_sub < -100)
-			rotation_sub = -100;
+		if (rotation_sub > 150)
+			rotation_sub = 150;
+		if (rotation_sub < -150)
+			rotation_sub = -150;
 
 		if (ps3con->getButtonPress(R1)) {
 			if (rotation < 200)
@@ -138,20 +138,36 @@ int main(void) {
 		X_100 = ps3Analog_ValueChanger(X_raw);
 		Y_100 = ps3Analog_ValueChanger(Y_raw);
 
+		if (ps3con->getButtonPress(RIGHT)) {
+			X_100 = 100;
+		}
+		if (ps3con->getButtonPress(LEFT)) {
+			X_100 = -100;
+		}
+		if (ps3con->getButtonPress(UP)) {
+			Y_100 = -100;
+		}
+		if (ps3con->getButtonPress(DOWN)) {
+			Y_100 = 100;
+		}
+
+		//auto RUN
 		if (ps3con->getButtonPress(CROSS)) {
-			if (targetX - encoderX >= 100 || targetX - encoderX <= -100) {
-				if (targetX < encoderX) {
-					X_100 = 100;
-				}
-				if (targetX > encoderX) {
+			if (targetX - encoderX >= 50 || targetX - encoderX <= -50) {
+				X_100 = (encoderX - targetX) / 2;
+				if (X_100 < -100) {
 					X_100 = -100;
 				}
+				if (X_100 > 100) {
+					X_100 = 100;
+				}
 			}
-			if (targetY - encoderY >= 100 || targetY - encoderY <= -100) {
-				if (targetY < encoderY) {
+			if (targetY - encoderY >= 50 || targetY - encoderY <= -50) {
+				Y_100 = (targetY - encoderY) / 2;
+				if (Y_100 < -100) {
 					Y_100 = -100;
 				}
-				if (targetY > encoderY) {
+				if (Y_100 > 100) {
 					Y_100 = 100;
 				}
 			}
@@ -181,17 +197,11 @@ int main(void) {
 		encoderX_old = encoderX_now;
 		encoderY_old = encoderY_now;
 
-		char str[128];
+		//char str[128];
 
-		//sprintf(str, "YPR: %d %.5f %.5f\r\n", (int) yaw_value,
-		//pitch * RAD_TO_DEG, roll * RAD_TO_DEG
-		//);
-		//sprintf(str, "Motor out: %.5f %.5f %.5f %.5f %.5f\r\n", (float) B_out,
-		//(float) A_out, (float) C_out, (float) yaw_value,
-		//(float) sensor_timer.yaw);
-
-		sprintf(str, "%.5f %.5f %.5f\r\n", encoderX, encoderY, X_100);
-		debug << str;
+		//sprintf(str, "AD: %5d %5d %5d %5d %5d %5d %5d %5d \r\n", mainBoard.ad[0]->get(), mainBoard.ad[1]->get(), mainBoard.ad[2]->get(), mainBoard.ad[3]->get(), mainBoard.ad[4]->get(), mainBoard.ad[5]->get(), mainBoard.ad[6]->get(), mainBoard.ad[7]->get());
+		//sprintf(str, "%.5f %.5f %.5f\r\n", encoderX, encoderY, X_100);
+		//debug << str;
 
 		MillisecondTimer::delay(50);
 	}
