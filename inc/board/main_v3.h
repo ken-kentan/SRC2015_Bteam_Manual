@@ -20,6 +20,7 @@
 #include "devices/led.h"
 #include "devices/button.h"
 #include "devices/motor.h"
+#include "devices/buzzer.h"
 #include "devices/encoder.h"
 #include "devices/mcp3208.h"
 #include "devices/mpu6050.h"
@@ -277,6 +278,21 @@ namespace stm32plus {
   using MOTOR_D_CHB = TimerChannel2Feature<>;
   using MOTOR_D = Motor< MOTOR_D_TIMER, MOTOR_D_CHA, MOTOR_D_CHB >;
 
+  //Add by Kentaro Doi
+  using BUZZER_TIMER = Timer9<
+        Timer9InternalClockFeature,
+        TimerChannel1Feature<>,
+        TimerChannel2Feature<>,
+        Timer9GpioFeature<
+        TIMER_REMAP_FULL,
+        TIM9_CH1_OUT,
+        TIM9_CH2_OUT
+        >
+    >;
+    using BUZZER_CHA = TimerChannel1Feature<>;
+    using BUZZER_CHB = TimerChannel2Feature<>;
+    using BUZZER = Buzzer< BUZZER_TIMER, BUZZER_CHA, BUZZER_CHB >;
+
   class MainV3 {
   public:
 
@@ -302,6 +318,7 @@ namespace stm32plus {
     MOTOR_C motorC;
     MOTOR_D motorD;
 
+    BUZZER buzzer;
 
     Spi3V1::Parameters Spi3V1Params;
     Spi3V2::Parameters Spi3V2Params;

@@ -10,22 +10,29 @@
 #include "config/stm32plus.h"
 #include "config/gpio.h"
 
-namespace stm32plus{
+namespace stm32plus {
 
-  class Led {
-  private:
-    GpioPinRef pin;
-  public:
-    Led(GpioPinRef _pin){
-      pin = _pin;
-    }
+class Led {
+private:
+	GpioPinRef pin;
+public:
+	Led(GpioPinRef _pin) {
+		pin = _pin;
+	}
 
-    void On() {
-      pin.set();
-    }
-    void Off() {
-      pin.reset();
-    }
-  };
+	void On() {
+		pin.set();
+	}
+	void Off() {
+		pin.reset();
+	}
+
+	void Flash() {
+		On();
+		MillisecondTimer::delay(500);
+		Off();
+		MillisecondTimer::delay(500);
+	}
+};
 
 }

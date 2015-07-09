@@ -6,14 +6,14 @@
 
 namespace stm32plus {
 template<class TimMotor, class ChannelA, class ChannelB>
-class Motor: TimMotor {
+class Buzzer: TimMotor {
 public:
 	enum {
-		MAX_COMPARE = 500
+		MAX_COMPARE = 5000
 	};
-	Motor() :
+	Buzzer() :
 			TimMotor() { //10000000
-		this->setTimeBaseByFrequency(10000000, MAX_COMPARE - 1);
+		this->setTimeBaseByFrequency(5000, MAX_COMPARE - 1);
 		ChannelA::initCompareForPwmOutput();
 		ChannelB::initCompareForPwmOutput();
 		this->enablePeripheral();
