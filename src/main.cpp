@@ -120,8 +120,11 @@ int main(void) {
 		}
 		rotation_sub = (yaw_value - yaw_reset) * 15;
 		if (ps3con->getButtonPress(CIRCLE)) {
+			mainBoard.buzzer.setOutput((float) -500 / 500.0);
 			yaw_reset = yaw_value;
 			rotation_sub = 0;
+		}else{
+			mainBoard.buzzer.setOutput((float) 0 / 500.0);
 		}
 
 		if (rotation_sub > 200)
@@ -217,7 +220,6 @@ int main(void) {
 		B_out = motorDriver_Protecter(B_v);
 		C_out = motorDriver_Protecter(C_v);
 
-		mainBoard.buzzer.setOutput((float) A_out / 500.0);
 		mainBoard.motorA.setOutput((float) A_out / 500.0);
 		mainBoard.motorB.setOutput((float) B_out / 500.0);
 		mainBoard.motorC.setOutput((float) C_out / 500.0);

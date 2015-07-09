@@ -5,15 +5,15 @@
 #include "config/timer.h"
 
 namespace stm32plus {
-template<class TimMotor, class ChannelA, class ChannelB>
-class Buzzer: TimMotor {
+template<class TimBuzzer, class ChannelA, class ChannelB>
+class Buzzer: TimBuzzer {
 public:
 	enum {
-		MAX_COMPARE = 5000
+		MAX_COMPARE = 6
 	};
 	Buzzer() :
-			TimMotor() { //10000000
-		this->setTimeBaseByFrequency(5000, MAX_COMPARE - 1);
+			TimBuzzer() { //10000000
+		this->setTimeBaseByFrequency(6, MAX_COMPARE - 1);
 		ChannelA::initCompareForPwmOutput();
 		ChannelB::initCompareForPwmOutput();
 		this->enablePeripheral();

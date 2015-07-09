@@ -284,7 +284,7 @@ namespace stm32plus {
         TimerChannel1Feature<>,
         TimerChannel2Feature<>,
         Timer9GpioFeature<
-        TIMER_REMAP_FULL,
+		TIMER_REMAP_FULL,
         TIM9_CH1_OUT,
         TIM9_CH2_OUT
         >
