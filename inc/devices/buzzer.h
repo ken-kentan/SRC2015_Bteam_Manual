@@ -8,23 +8,33 @@ namespace stm32plus {
 template<class TimBuzzer, class ChannelA, class ChannelB>
 class Buzzer: TimBuzzer {
 public:
-	enum {
-		MAX_COMPARE = 6
-	};
+	int MAX_COMPARE = 1;
+	/*
+	 enum {
+	 MAX_COMPARE = 6
+	 };
+	 */
 	Buzzer() :
 			TimBuzzer() { //10000000
-		this->setTimeBaseByFrequency(6, MAX_COMPARE - 1);
+		this->setTimeBaseByFrequency(MAX_COMPARE, MAX_COMPARE - 1);
 		ChannelA::initCompareForPwmOutput();
 		ChannelB::initCompareForPwmOutput();
 		this->enablePeripheral();
 	}
-	void setOutput(float duty) {
+
+	void set(float duty, int mode) {
 		if (duty > 1.0f) {
 			duty = 1.0f;
 		} else if (duty < -1.0f) {
 			duty = -1.0f;
 		}
 		duty = duty * 0.95;
+
+		MAX_COMPARE = mode;
+		this->setTimeBaseByFrequency(MAX_COMPARE, MAX_COMPARE - 1);
+
+		if (MAX_COMPARE <= 1)
+			MAX_COMPARE = 1;
 
 		int16_t value = (int16_t) (duty * MAX_COMPARE);
 		if (value > 0) {
@@ -36,7 +46,7 @@ public:
 		}
 	}
 	inline void stop() {
-		setOutput(0);
+		set(0, 6);
 	}
 };
 }

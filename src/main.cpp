@@ -8,8 +8,7 @@
 #include "board/main_v3.h"
 #include "devices/can/ps3con.h"
 #include "machine/machine.h"
-
-#include "utils/MadgwickAHRS.h"
+#include "devices/buzzer.h"
 
 using namespace stm32plus;
 
@@ -78,9 +77,10 @@ int main(void) {
 		mainBoard.can.Update();
 
 		//Safety start
-		if (Start == false) {
-			if (ps3con->getButtonPress(START))
+		if (Start == false || ps3con->getButtonPress(CONNECTED) == 0) {
+			if (ps3con->getButtonPress(START)) {
 				Start = true;
+			}
 
 			mainBoard.led.Flash();
 			char str[128];
@@ -89,7 +89,6 @@ int main(void) {
 			MillisecondTimer::delay(50);
 			continue;
 		}
-
 
 		mainBoard.led.On();
 
@@ -118,13 +117,10 @@ int main(void) {
 		if (yaw_now - yaw_old > 0.03 || yaw_now - yaw_old < -0.03) {
 			yaw_value += yaw_now - yaw_old;
 		}
-		rotation_sub = (yaw_value - yaw_reset) * 15;
+		rotation_sub = (yaw_value - yaw_reset) * 10;
 		if (ps3con->getButtonPress(CIRCLE)) {
-			mainBoard.buzzer.setOutput((float) -500 / 500.0);
 			yaw_reset = yaw_value;
 			rotation_sub = 0;
-		}else{
-			mainBoard.buzzer.setOutput((float) 0 / 500.0);
 		}
 
 		if (rotation_sub > 200)
@@ -168,8 +164,7 @@ int main(void) {
 		}
 		if (ps3con->getButtonPress(UP)) {
 			Y_100 = -100;
-		}
-		if (ps3con->getButtonPress(DOWN)) {
+		} else if (ps3con->getButtonPress(DOWN)) {
 			Y_100 = 100;
 		}
 
@@ -182,22 +177,24 @@ int main(void) {
 			if (t_eX >= 10 || t_eX <= -10) {
 //				autoX += ((t_eX / 4) - autoX) / 5;
 				if (t_eX / 3 >= 290) {
-					autoX += 10;
+					autoX = 290;
 				} else if (t_eX / 3 <= -290) {
-					autoX -= 10;
-				} else {
-					autoX = t_eX / 3;
+					autoX = -290;
 				}
 			}
 			if (t_eY >= 10 || t_eY <= -10) {
 //				autoY += ((t_eY / 4) - autoY) / 5;
 				if (t_eY / 3 >= 290) {
-					autoY += 10;
+					autoY = 290;
 				} else if (t_eY / 3 <= -290) {
-					autoY -= 10;
-				} else {
-					autoY = t_eY / 3;
+					autoY = -290;
 				}
+			}
+			if (t_eX / 3 >= 290 || t_eX / 3 <= -290) {
+				autoX += (-100 - autoX) / 3;
+			}
+			if (t_eY / 3 >= 290 || t_eY / 3 <= -290) {
+				autoY += (-100 - autoY) / 3;
 			}
 			X_100 = autoX;
 			Y_100 = autoY;
@@ -220,6 +217,12 @@ int main(void) {
 		B_out = motorDriver_Protecter(B_v);
 		C_out = motorDriver_Protecter(C_v);
 
+		if (A_out == 499 || B_out == 499 || C_out == 499 || A_out == -499
+				|| B_out == -499 || C_out == -499)
+			mainBoard.buzzer.set(-1, 6);
+		else
+			mainBoard.buzzer.stop();
+
 		mainBoard.motorA.setOutput((float) A_out / 500.0);
 		mainBoard.motorB.setOutput((float) B_out / 500.0);
 		mainBoard.motorC.setOutput((float) C_out / 500.0);
@@ -233,7 +236,8 @@ int main(void) {
 
 		//sprintf(str, "AD: %5d %5d %5d %5d %5d %5d %5d %5d \r\n", mainBoard.ad[0]->get(), mainBoard.ad[1]->get(), mainBoard.ad[2]->get(), mainBoard.ad[3]->get(), mainBoard.ad[4]->get(), mainBoard.ad[5]->get(), mainBoard.ad[6]->get(), mainBoard.ad[7]->get());
 		//sprintf(str, "%.5f %d\r\n", yaw_value,rotation_sub);
-		sprintf(str, "YPR: %.5f\r\n", (float) A_out / 500.0);
+		sprintf(str, "YPR: %.5f %.5f %.5f\r\n", (float) A_out / 500.0,
+				yaw_value, sensor_timer.yaw);
 		debug << str;
 
 		MillisecondTimer::delay(50);
@@ -255,12 +259,13 @@ int motorDriver_Protecter(int IN_Mout) {
 	int ret;
 	//if (IN_out < 3 && IN_out > -3)
 	//	ret = 0;
-	if (IN_Mout > 499)
+	if (IN_Mout > 499) {
 		ret = 499;
-	else if (IN_Mout < -499)
+	} else if (IN_Mout < -499) {
 		ret = -499;
-	else
+	} else {
 		ret = IN_Mout;
+	}
 	return ret;
 }
 
