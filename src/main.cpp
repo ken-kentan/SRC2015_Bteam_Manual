@@ -122,34 +122,17 @@ int main(void) {
 			yaw_reset = yaw_value;
 			rotation_sub = 0;
 		}
-
 		if (rotation_sub > 200)
 			rotation_sub = 200;
 		if (rotation_sub < -200)
 			rotation_sub = -200;
 
-		if (ps3con->getButtonPress(R1)) {
-			if (rotation < 200)
-				rotation += 50;
-			else
-				rotation = 200;
-		}
-
-		if (ps3con->getButtonPress(L1)) {
-			if (rotation > -200)
-				rotation -= 50;
-			else
-				rotation = -200;
-		}
-		if (ps3con->getButtonPress(L1) == 0
-				&& ps3con->getButtonPress(R1) == 0) {
-			if (rotation <= 1 && rotation >= -1)
-				rotation = 0;
-			else if (rotation > 1)
-				rotation -= 50;
-			else if (rotation < -1)
-				rotation += 50;
-		}
+		//Main rotation
+		rotation = ps3con->getAnalog(ANALOG_R2) - ps3con->getAnalog(ANALOG_L2);
+		if (rotation > 200)
+			rotation = 200;
+		if (rotation < -200)
+			rotation = -200;
 
 		X_raw = ps3con->getAnalog(ANALOG_L_X);
 		Y_raw = ps3con->getAnalog(ANALOG_L_Y);
@@ -164,7 +147,8 @@ int main(void) {
 		}
 		if (ps3con->getButtonPress(UP)) {
 			Y_100 = -100;
-		} else if (ps3con->getButtonPress(DOWN)) {
+		}
+		if (ps3con->getButtonPress(DOWN)) {
 			Y_100 = 100;
 		}
 
@@ -217,27 +201,27 @@ int main(void) {
 		B_out = motorDriver_Protecter(B_v);
 		C_out = motorDriver_Protecter(C_v);
 
+		//Speed Alart
 		if (A_out == 499 || B_out == 499 || C_out == 499 || A_out == -499
 				|| B_out == -499 || C_out == -499)
 			mainBoard.buzzer.set(-1, 6);
 		else
 			mainBoard.buzzer.stop();
 
+		//Motor output
 		mainBoard.motorA.setOutput((float) A_out / 500.0);
 		mainBoard.motorB.setOutput((float) B_out / 500.0);
 		mainBoard.motorC.setOutput((float) C_out / 500.0);
 
 		yaw_old = yaw_now;
-
 		encoderX_old = encoderX_now;
 		encoderY_old = encoderY_now;
 
+		//debug
 		char str[128];
-
-		//sprintf(str, "AD: %5d %5d %5d %5d %5d %5d %5d %5d \r\n", mainBoard.ad[0]->get(), mainBoard.ad[1]->get(), mainBoard.ad[2]->get(), mainBoard.ad[3]->get(), mainBoard.ad[4]->get(), mainBoard.ad[5]->get(), mainBoard.ad[6]->get(), mainBoard.ad[7]->get());
 		//sprintf(str, "%.5f %d\r\n", yaw_value,rotation_sub);
-		sprintf(str, "YPR: %.5f %.5f %.5f\r\n", (float) A_out / 500.0,
-				yaw_value, sensor_timer.yaw);
+		sprintf(str, "YPR: %.5f %.5f\r\n", (float) ps3con->getAnalog(ANALOG_L2),
+				(float) ps3con->getAnalog(ANALOG_R2));
 		debug << str;
 
 		MillisecondTimer::delay(50);
@@ -267,11 +251,6 @@ int motorDriver_Protecter(int IN_Mout) {
 		ret = IN_Mout;
 	}
 	return ret;
-}
-
-int smooth_Controller(int IN_Sout) {
-
-	return IN_Sout;
 }
 
 /* End Of File ---------------------------------------------------------------*/
