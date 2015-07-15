@@ -1,4 +1,13 @@
-/* Includes ------------------------------------------------------------------*/
+/*
+ ============================================================================
+ Name        : main.cpp
+ Author      : Kentaro Doi
+ Version     : 1.0
+ Copyright   : kentan.jp
+ Description : SRC2015 Bteam Manual
+ ============================================================================
+ */
+
 #include "hw_config.h"
 #include "config/stm32plus.h"
 #include "config/gpio.h"
@@ -11,56 +20,39 @@
 
 using namespace stm32plus;
 
-/* Defines -------------------------------------------------------------------*/
 
 #define RAD_TO_DEG (180/M_PI)
-#define R_limit 200
+#define R_LIMIT 200
+#define R_Gyro_LIMIT 200
+#define SPEED_Linearly 150
 
-/* Variables -----------------------------------------------------------------*/
-float yaw_now   = 0,
-	  yaw_old   = 0,
-	  yaw_value = 0,
-	  yaw_reset = 0,
-	  rotation  = 0,
-	  targetX   = 0,
-	  targetY   = 0;
 
-int A_out      =  0,
-	B_out      =  0,
-	C_out      =  0,
-	autoX      =  0,
-	autoY      =  0,
-	autoXY[2]  = {0},
-	out_100[2] = {0};
+int auto_runXY[2]  = {0},
+	anti_slip[2] = {0};
 
-bool Start = false;
-
-/* Constants -----------------------------------------------------------------*/
-
-/* Function prototypes -------------------------------------------------------*/
-
-/* Functions -----------------------------------------------------------------*/
-
-/**************************************************************************/
-/*!
- @brief  Main Program.
- @param  None.
- @retval None.
- */
-/**************************************************************************/
 
 int motorDriver_Protecter(int IN_Mout);
 int ps3Analog_ValueChanger(int IN_100);
 int Anti_sliper(int XY_100, int i);
 int Auto_Runner(int t_e, int x_or_y, int enc_old, int enc_now);
 
+
 int main(void) {
-	float encX     = 0,
-		  encY     = 0,
-		  encX_now = 0,
-		  encY_now = 0,
-		  encX_old = 0,
-		  encY_old = 0;
+	float encX      = 0,
+		  encY      = 0,
+		  encX_now  = 0,
+		  encY_now  = 0,
+		  encX_old  = 0,
+		  encY_old  = 0,
+		  yaw_now   = 0,
+		  yaw_old   = 0,
+		  yaw_value = 0,
+		  yaw_reset = 0,
+		  rotation  = 0,
+		  targetX   = 0,
+		  targetY   = 0;
+
+	bool Start = false;
 
 	//Initialise Systick
 	MillisecondTimer::initialise();
@@ -89,6 +81,9 @@ int main(void) {
 			A_v           = 0,
 			B_v           = 0,
 			C_v           = 0,
+			A_out         = 0,
+			B_out         = 0,
+			C_out         = 0,
 			X_100         = 0,
 			Y_100         = 0;
 
@@ -146,24 +141,24 @@ int main(void) {
 			else if (rotation_gyro < 0) rotation_gyro -= 5;
 		}
 
-		if (rotation_gyro >  200) rotation_gyro =  200;
-		if (rotation_gyro < -200) rotation_gyro = -200;
+		if (rotation_gyro >  R_Gyro_LIMIT) rotation_gyro =  R_Gyro_LIMIT;
+		if (rotation_gyro < -R_Gyro_LIMIT) rotation_gyro = -R_Gyro_LIMIT;
 
 		//Main rotation
 		rotation = ps3con->getAnalog(ANALOG_R2) - ps3con->getAnalog(ANALOG_L2);
 
-		if (rotation >  200) rotation =  200;
-		if (rotation < -200) rotation = -200;
+		if (rotation >  R_LIMIT) rotation =  R_LIMIT;
+		if (rotation < -R_LIMIT) rotation = -R_LIMIT;
 
 		X_100 = ps3Analog_ValueChanger(ps3con->getAnalog(ANALOG_L_X));
 		Y_100 = ps3Analog_ValueChanger(ps3con->getAnalog(ANALOG_L_Y));
 
-		if (ps3con->getButtonPress(RIGHT)) X_100 =  150;
-		if (ps3con->getButtonPress(LEFT))  X_100 = -150;
-		if (ps3con->getButtonPress(UP))    Y_100 = -150;
-		if (ps3con->getButtonPress(DOWN))  Y_100 =  150;
+		if (ps3con->getButtonPress(RIGHT)) X_100 =  SPEED_Linearly;
+		if (ps3con->getButtonPress(LEFT))  X_100 = -SPEED_Linearly;
+		if (ps3con->getButtonPress(UP))    Y_100 = -SPEED_Linearly;
+		if (ps3con->getButtonPress(DOWN))  Y_100 =  SPEED_Linearly;
 
-		//run to Object
+		//Automatically adjust the distance between the material
 		if (ps3con->getButtonPress(SQUARE)) {
 			int target_Obj = 1500;
 
@@ -207,8 +202,6 @@ int main(void) {
 		encX_old = encX_now;
 		encY_old = encY_now;
 
-		//float test;
-		//sensor_timer.ahrs.getYaw(test);
 		//debug
 		char str[128];
 		sprintf(str, "%.5f\r\n", (float) mainBoard.ad[0]->get());
@@ -222,18 +215,18 @@ int main(void) {
 }
 
 int ps3Analog_ValueChanger(int IN_100) {
-	IN_100 = (IN_100 - 127.5) * 0.7843;
-	IN_100 *= 4;
+	int ret;
+	ret = (IN_100 - 127.5) * 0.7843;
+	ret *= 4;
 
-	if (IN_100 < 14 && IN_100 > -14) IN_100 = 0;
+	if (ret < 14 && ret > -14) ret = 0;
 
-	return IN_100;
+	return ret;
 }
 
 int motorDriver_Protecter(int IN_Mout) {
 	int ret;
-	//if (IN_out < 3 && IN_out > -3)
-	//	ret = 0;
+
 	if (IN_Mout > 499) {
 		ret = 499;
 	} else if (IN_Mout < -499) {
@@ -247,12 +240,12 @@ int motorDriver_Protecter(int IN_Mout) {
 int Anti_sliper(int XY_100, int i) {
 
 	if (XY_100 == 0) {
-		out_100[i] = XY_100;
+		anti_slip[i] = XY_100;
 	} else {
-		out_100[i] += (XY_100 - out_100[i]) / 5;
+		anti_slip[i] += (XY_100 - anti_slip[i]) / 5;
 	}
 
-	return out_100[i];
+	return anti_slip[i];
 }
 
 int Auto_Runner(int t_e, int x_or_y, int enc_old, int enc_now) {
