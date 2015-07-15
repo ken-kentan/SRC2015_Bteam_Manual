@@ -5,6 +5,7 @@
 #include "config/gpio.h"
 #include "config/timing.h"
 #include "utils/debug.h"
+//#include "utils/MadgwickAHRS.h"
 #include "board/main_v3.h"
 #include "devices/can/ps3con.h"
 #include "machine/machine.h"
@@ -21,13 +22,13 @@ float yaw_now = 0, yaw_old = 0, yaw_value = 0, yaw_reset = 0, rotation = 0;
 
 float targetX = 0, targetY = 0;
 
-int A_out = 0, B_out = 0, C_out = 0, autoX = 0, autoY = 0;
+int A_out = 0, B_out = 0, C_out = 0, autoX = 0, autoY = 0, autoXY[2],
+		out_100[2];
 
 bool Start = false;
 
 /* Constants -----------------------------------------------------------------*/
 
-//pin29
 /* Function prototypes -------------------------------------------------------*/
 
 /* Functions -----------------------------------------------------------------*/
@@ -42,11 +43,12 @@ bool Start = false;
 
 int motorDriver_Protecter(int IN_Mout);
 int ps3Analog_ValueChanger(int IN_100);
+int Anti_sliper(int XY_100, int i);
+int Auto_Runner(int t_e, int x_or_y, int enc_old, int enc_now);
 
 int main(void) {
-	float encoderX = 0, encoderY = 0;
-	float encoderX_now = 0, encoderX_old = 0, encoderY_now = 0,
-			encoderY_old = 0;
+	float encX = 0, encY = 0;
+	float encX_now = 0, encX_old = 0, encY_now = 0, encY_old = 0;
 
 	//Initialise Systick
 	MillisecondTimer::initialise();
@@ -71,8 +73,7 @@ int main(void) {
 	SensorTimer sensor_timer(&mainBoard);
 
 	while (1) {
-		int X_raw = 0, Y_raw = 0, rotation_sub = 0, A_v = 0, B_v = 0, C_v = 0,
-				X_100 = 0, Y_100 = 0;
+		int rotation_gyro = 0, A_v = 0, B_v = 0, C_v = 0, X_100 = 0, Y_100 = 0;
 
 		mainBoard.can.Update();
 
@@ -82,50 +83,53 @@ int main(void) {
 				Start = true;
 			}
 
+			if (Start == true)
+				mainBoard.buzzer.set(-1, 6);
+			else
+				mainBoard.buzzer.stop();
+
 			mainBoard.led.Flash();
 			char str[128];
 			sprintf(str, "Please push START button. \r\n");
 			debug << str;
 			MillisecondTimer::delay(50);
 			continue;
-		}
+		} else
+			mainBoard.buzzer.stop();
 
 		mainBoard.led.On();
 
-		encoderX_now = mainBoard.encoders.getCounter1();
-		encoderY_now = mainBoard.encoders.getCounter2();
+		encX_now = mainBoard.encoders.getCounter1();
+		encY_now = mainBoard.encoders.getCounter2();
 
-		if (encoderX_now - encoderX_old < 500
-				&& encoderX_now - encoderX_old > -500) {
-			encoderX += encoderX_now - encoderX_old;
-
+		if (encX_now - encX_old < 10000 && encX_now - encX_old > -10000) {
+			encX += encX_now - encX_old;
 		}
-		if (encoderY_now - encoderY_old < 500
-				&& encoderY_now - encoderY_old > -500) {
-			encoderY += encoderY_now - encoderY_old;
-
+		if (encY_now - encY_old < 10000 && encY_now - encY_old > -10000) {
+			encY += encY_now - encY_old;
 		}
 
 		if (ps3con->getButtonPress(TRIANGLE)) {
-			targetX = encoderX;
-			targetY = encoderY;
+			targetX = encX;
+			targetY = encY;
 		}
 
-		yaw_now = sensor_timer.yaw;
-		//sensor_timer.ahrs.getYawPitchRoll(yaw_now);
+		//yaw_now = sensor_timer.yaw;
+		sensor_timer.ahrs.getYaw(yaw_now);
+		yaw_now *= RAD_TO_DEG;
 
-		if (yaw_now - yaw_old > 0.03 || yaw_now - yaw_old < -0.03) {
+		if (yaw_now - yaw_old > 0.05 || yaw_now - yaw_old < -0.05) {
 			yaw_value += yaw_now - yaw_old;
 		}
-		rotation_sub = (yaw_value - yaw_reset) * 10;
+		rotation_gyro = (yaw_value - yaw_reset) * 17;
 		if (ps3con->getButtonPress(CIRCLE)) {
 			yaw_reset = yaw_value;
-			rotation_sub = 0;
+			rotation_gyro = 0;
 		}
-		if (rotation_sub > 200)
-			rotation_sub = 200;
-		if (rotation_sub < -200)
-			rotation_sub = -200;
+		if (rotation_gyro > 200)
+			rotation_gyro = 200;
+		if (rotation_gyro < -200)
+			rotation_gyro = -200;
 
 		//Main rotation
 		rotation = ps3con->getAnalog(ANALOG_R2) - ps3con->getAnalog(ANALOG_L2);
@@ -134,79 +138,54 @@ int main(void) {
 		if (rotation < -200)
 			rotation = -200;
 
-		X_raw = ps3con->getAnalog(ANALOG_L_X);
-		Y_raw = ps3con->getAnalog(ANALOG_L_Y);
-		X_100 = ps3Analog_ValueChanger(X_raw);
-		Y_100 = ps3Analog_ValueChanger(Y_raw);
+		X_100 = ps3Analog_ValueChanger(ps3con->getAnalog(ANALOG_L_X));
+		Y_100 = ps3Analog_ValueChanger(ps3con->getAnalog(ANALOG_L_Y));
 
 		if (ps3con->getButtonPress(RIGHT)) {
-			X_100 = 100;
+			X_100 = 150;
 		}
 		if (ps3con->getButtonPress(LEFT)) {
-			X_100 = -100;
+			X_100 = -150;
 		}
 		if (ps3con->getButtonPress(UP)) {
-			Y_100 = -100;
+			Y_100 = -150;
 		}
 		if (ps3con->getButtonPress(DOWN)) {
-			Y_100 = 100;
+			Y_100 = 150;
+		}
+
+		//run to Object
+		if (ps3con->getButtonPress(SQUARE)) {
+			if (mainBoard.ad[0]->get() > 1550) {
+				Y_100 = (mainBoard.ad[0]->get() - 1550) / 2;
+			}
+			if (mainBoard.ad[0]->get() < 1500) {
+				Y_100 = (mainBoard.ad[0]->get() - 1500) / 2;
+			}
+
+			if (Y_100 > 100)
+				Y_100 = 100;
+			if (Y_100 < -100)
+				Y_100 = -100;
 		}
 
 		//auto RUN
 		if (ps3con->getButtonPress(CROSS)) {
-			int t_eX = 0, t_eY = 0;
-			t_eX = targetX - encoderX;
-			t_eY = targetY - encoderY;
-
-			if (t_eX >= 10 || t_eX <= -10) {
-//				autoX += ((t_eX / 4) - autoX) / 5;
-				if (t_eX / 3 >= 290) {
-					autoX = 290;
-				} else if (t_eX / 3 <= -290) {
-					autoX = -290;
-				}
-			}
-			if (t_eY >= 10 || t_eY <= -10) {
-//				autoY += ((t_eY / 4) - autoY) / 5;
-				if (t_eY / 3 >= 290) {
-					autoY = 290;
-				} else if (t_eY / 3 <= -290) {
-					autoY = -290;
-				}
-			}
-			if (t_eX / 3 >= 290 || t_eX / 3 <= -290) {
-				autoX += (-100 - autoX) / 3;
-			}
-			if (t_eY / 3 >= 290 || t_eY / 3 <= -290) {
-				autoY += (-100 - autoY) / 3;
-			}
-			X_100 = autoX;
-			Y_100 = autoY;
+			X_100 = Auto_Runner(encX - targetX, 0, encX_old, encX_now);
+			Y_100 = Auto_Runner(targetY - encY, 1, encY_old, encY_now);
 		}
 
-		A_v = B_v = C_v = 0;
+		X_100 = Anti_sliper(X_100, 0);
+		Y_100 = Anti_sliper(Y_100, 1);
 
-		//moto
-		A_v = Y_100 * -1 + X_100 / 2 + rotation + rotation_sub;
-		B_v = Y_100 + X_100 / 2 + rotation + rotation_sub;
-		C_v = X_100 * -1 + rotation + rotation_sub;
+		//motor
+		A_v = Y_100 * -1 + X_100 / 2 + rotation + rotation_gyro;
+		B_v = Y_100 + X_100 / 2 + rotation + rotation_gyro;
+		C_v = X_100 * -1 + rotation + rotation_gyro;
 
-		//smooth
-		/*
-		 A_out += (A_v - A_out) / 5;
-		 B_out += (B_v - B_out) / 5;
-		 C_out += (C_v - C_out) / 5;
-		 */
 		A_out = motorDriver_Protecter(A_v);
 		B_out = motorDriver_Protecter(B_v);
 		C_out = motorDriver_Protecter(C_v);
-
-		//Speed Alart
-		if (A_out == 499 || B_out == 499 || C_out == 499 || A_out == -499
-				|| B_out == -499 || C_out == -499)
-			mainBoard.buzzer.set(-1, 6);
-		else
-			mainBoard.buzzer.stop();
 
 		//Motor output
 		mainBoard.motorA.setOutput((float) A_out / 500.0);
@@ -214,14 +193,16 @@ int main(void) {
 		mainBoard.motorC.setOutput((float) C_out / 500.0);
 
 		yaw_old = yaw_now;
-		encoderX_old = encoderX_now;
-		encoderY_old = encoderY_now;
+		encX_old = encX_now;
+		encY_old = encY_now;
 
+		//float test;
+		//sensor_timer.ahrs.getYaw(test);
 		//debug
 		char str[128];
-		//sprintf(str, "%.5f %d\r\n", yaw_value,rotation_sub);
-		sprintf(str, "YPR: %.5f %.5f\r\n", (float) ps3con->getAnalog(ANALOG_L2),
-				(float) ps3con->getAnalog(ANALOG_R2));
+		sprintf(str, "%.5f\r\n", (float) mainBoard.ad[0]->get());
+		//sprintf(str, "%.5f %.5f %.5f %.5f %.5f\r\n", (float) A_out, (float) B_out,
+		//		(float)C_out, (float)X_100,(float)Y_100);
 		debug << str;
 
 		MillisecondTimer::delay(50);
@@ -231,9 +212,9 @@ int main(void) {
 
 int ps3Analog_ValueChanger(int IN_100) {
 	IN_100 = (IN_100 - 127.5) * 0.7843;
-	IN_100 *= 3;
+	IN_100 *= 4;
 
-	if (IN_100 < 10 && IN_100 > -10)
+	if (IN_100 < 14 && IN_100 > -14)
 		IN_100 = 0;
 
 	return IN_100;
@@ -253,4 +234,38 @@ int motorDriver_Protecter(int IN_Mout) {
 	return ret;
 }
 
+int Anti_sliper(int XY_100, int i) {
+
+	if (XY_100 == 0) {
+		out_100[i] = XY_100;
+	} else {
+		out_100[i] += (XY_100 - out_100[i]) / 5;
+	}
+
+	return out_100[i];
+}
+
+int Auto_Runner(int t_e, int x_or_y, int enc_old, int enc_now) {
+	if (t_e >= 50 || t_e <= -50) {
+		if (enc_old - enc_now == 0) {
+			if (autoXY[x_or_y] < 0)
+				autoXY[x_or_y] -= 5;
+			else {
+				autoXY[x_or_y] += 5;
+			}
+		} else {
+			autoXY[x_or_y] += ((t_e / 15) - autoXY[x_or_y]) / 3;
+		}
+	} else {
+		autoXY[x_or_y] = 0;
+	}
+
+	if (autoXY[x_or_y] >= 250) {
+		autoXY[x_or_y] = 250;
+	} else if (autoXY[x_or_y] <= -250) {
+		autoXY[x_or_y] = -250;
+	}
+
+	return autoXY[x_or_y];
+}
 /* End Of File ---------------------------------------------------------------*/

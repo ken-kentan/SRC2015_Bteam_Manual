@@ -8,7 +8,7 @@ namespace stm32plus {
 template<class TimBuzzer, class ChannelA, class ChannelB>
 class Buzzer: TimBuzzer {
 public:
-	int MAX_COMPARE = 1;
+	int MAX_COMPARE = 6;
 	/*
 	 enum {
 	 MAX_COMPARE = 6

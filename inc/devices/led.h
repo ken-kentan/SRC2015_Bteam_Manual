@@ -29,9 +29,9 @@ public:
 
 	void Flash() {
 		On();
-		MillisecondTimer::delay(500);
+		MillisecondTimer::delay(200);
 		Off();
-		MillisecondTimer::delay(500);
+		MillisecondTimer::delay(200);
 	}
 };
 
