@@ -1,11 +1,9 @@
 /* Includes ------------------------------------------------------------------*/
 #include "hw_config.h"
-
 #include "config/stm32plus.h"
 #include "config/gpio.h"
 #include "config/timing.h"
 #include "utils/debug.h"
-//#include "utils/MadgwickAHRS.h"
 #include "board/main_v3.h"
 #include "devices/can/ps3con.h"
 #include "machine/machine.h"
@@ -16,14 +14,24 @@ using namespace stm32plus;
 /* Defines -------------------------------------------------------------------*/
 
 #define RAD_TO_DEG (180/M_PI)
+#define R_limit 200
 
 /* Variables -----------------------------------------------------------------*/
-float yaw_now = 0, yaw_old = 0, yaw_value = 0, yaw_reset = 0, rotation = 0;
+float yaw_now   = 0,
+	  yaw_old   = 0,
+	  yaw_value = 0,
+	  yaw_reset = 0,
+	  rotation  = 0,
+	  targetX   = 0,
+	  targetY   = 0;
 
-float targetX = 0, targetY = 0;
-
-int A_out = 0, B_out = 0, C_out = 0, autoX = 0, autoY = 0, autoXY[2],
-		out_100[2];
+int A_out      =  0,
+	B_out      =  0,
+	C_out      =  0,
+	autoX      =  0,
+	autoY      =  0,
+	autoXY[2]  = {0},
+	out_100[2] = {0};
 
 bool Start = false;
 
@@ -47,8 +55,12 @@ int Anti_sliper(int XY_100, int i);
 int Auto_Runner(int t_e, int x_or_y, int enc_old, int enc_now);
 
 int main(void) {
-	float encX = 0, encY = 0;
-	float encX_now = 0, encX_old = 0, encY_now = 0, encY_old = 0;
+	float encX     = 0,
+		  encY     = 0,
+		  encX_now = 0,
+		  encY_now = 0,
+		  encX_old = 0,
+		  encY_old = 0;
 
 	//Initialise Systick
 	MillisecondTimer::initialise();
@@ -73,20 +85,21 @@ int main(void) {
 	SensorTimer sensor_timer(&mainBoard);
 
 	while (1) {
-		int rotation_gyro = 0, A_v = 0, B_v = 0, C_v = 0, X_100 = 0, Y_100 = 0;
+		int rotation_gyro = 0,
+			A_v           = 0,
+			B_v           = 0,
+			C_v           = 0,
+			X_100         = 0,
+			Y_100         = 0;
 
 		mainBoard.can.Update();
 
 		//Safety start
 		if (Start == false || ps3con->getButtonPress(CONNECTED) == 0) {
-			if (ps3con->getButtonPress(START)) {
-				Start = true;
-			}
+			if (ps3con->getButtonPress(START)) Start = true;
 
-			if (Start == true)
-				mainBoard.buzzer.set(-1, 6);
-			else
-				mainBoard.buzzer.stop();
+			if (Start == true) mainBoard.buzzer.set(-1, 6);
+			else               mainBoard.buzzer.stop();
 
 			mainBoard.led.Flash();
 			char str[128];
@@ -109,64 +122,62 @@ int main(void) {
 			encY += encY_now - encY_old;
 		}
 
+		//Set Target of AutoRUN
 		if (ps3con->getButtonPress(TRIANGLE)) {
 			targetX = encX;
 			targetY = encY;
 		}
 
-		//yaw_now = sensor_timer.yaw;
 		sensor_timer.ahrs.getYaw(yaw_now);
 		yaw_now *= RAD_TO_DEG;
 
-		if (yaw_now - yaw_old > 0.05 || yaw_now - yaw_old < -0.05) {
-			yaw_value += yaw_now - yaw_old;
-		}
+		//Gyro Filter
+		if (yaw_now - yaw_old > 0.05 || yaw_now - yaw_old < -0.05) yaw_value += yaw_now - yaw_old;
+
 		rotation_gyro = (yaw_value - yaw_reset) * 17;
+
 		if (ps3con->getButtonPress(CIRCLE)) {
 			yaw_reset = yaw_value;
 			rotation_gyro = 0;
 		}
-		if (rotation_gyro > 200)
-			rotation_gyro = 200;
-		if (rotation_gyro < -200)
-			rotation_gyro = -200;
+
+		if(encX_now - encX_old == 0){
+			if      (rotation_gyro > 0) rotation_gyro += 5;
+			else if (rotation_gyro < 0) rotation_gyro -= 5;
+		}
+
+		if (rotation_gyro >  200) rotation_gyro =  200;
+		if (rotation_gyro < -200) rotation_gyro = -200;
 
 		//Main rotation
 		rotation = ps3con->getAnalog(ANALOG_R2) - ps3con->getAnalog(ANALOG_L2);
-		if (rotation > 200)
-			rotation = 200;
-		if (rotation < -200)
-			rotation = -200;
+
+		if (rotation >  200) rotation =  200;
+		if (rotation < -200) rotation = -200;
 
 		X_100 = ps3Analog_ValueChanger(ps3con->getAnalog(ANALOG_L_X));
 		Y_100 = ps3Analog_ValueChanger(ps3con->getAnalog(ANALOG_L_Y));
 
-		if (ps3con->getButtonPress(RIGHT)) {
-			X_100 = 150;
-		}
-		if (ps3con->getButtonPress(LEFT)) {
-			X_100 = -150;
-		}
-		if (ps3con->getButtonPress(UP)) {
-			Y_100 = -150;
-		}
-		if (ps3con->getButtonPress(DOWN)) {
-			Y_100 = 150;
-		}
+		if (ps3con->getButtonPress(RIGHT)) X_100 =  150;
+		if (ps3con->getButtonPress(LEFT))  X_100 = -150;
+		if (ps3con->getButtonPress(UP))    Y_100 = -150;
+		if (ps3con->getButtonPress(DOWN))  Y_100 =  150;
 
 		//run to Object
 		if (ps3con->getButtonPress(SQUARE)) {
-			if (mainBoard.ad[0]->get() > 1550) {
-				Y_100 = (mainBoard.ad[0]->get() - 1550) / 2;
-			}
-			if (mainBoard.ad[0]->get() < 1500) {
-				Y_100 = (mainBoard.ad[0]->get() - 1500) / 2;
+			int target_Obj = 1500;
+
+			if (mainBoard.ad[0]->get() > target_Obj + 25 || mainBoard.ad[0]->get() < target_Obj - 25) {
+				Y_100 = (mainBoard.ad[0]->get() - target_Obj) / 3;
+
+				if(encY_now - encY_old == 0){
+					if(Y_100 > 0)      Y_100 += 2;
+					else if(Y_100 < 0) Y_100 -= 2;
+				}
 			}
 
-			if (Y_100 > 100)
-				Y_100 = 100;
-			if (Y_100 < -100)
-				Y_100 = -100;
+			if (Y_100 > 90)  Y_100 = 90;
+			if (Y_100 < -90) Y_100 = -90;
 		}
 
 		//auto RUN
@@ -214,8 +225,7 @@ int ps3Analog_ValueChanger(int IN_100) {
 	IN_100 = (IN_100 - 127.5) * 0.7843;
 	IN_100 *= 4;
 
-	if (IN_100 < 14 && IN_100 > -14)
-		IN_100 = 0;
+	if (IN_100 < 14 && IN_100 > -14) IN_100 = 0;
 
 	return IN_100;
 }
@@ -248,11 +258,10 @@ int Anti_sliper(int XY_100, int i) {
 int Auto_Runner(int t_e, int x_or_y, int enc_old, int enc_now) {
 	if (t_e >= 50 || t_e <= -50) {
 		if (enc_old - enc_now == 0) {
-			if (autoXY[x_or_y] < 0)
-				autoXY[x_or_y] -= 5;
-			else {
-				autoXY[x_or_y] += 5;
-			}
+
+			if      (autoXY[x_or_y] < 0) autoXY[x_or_y] -= 5;
+			else if (autoXY[x_or_y] > 0) autoXY[x_or_y] += 5;
+
 		} else {
 			autoXY[x_or_y] += ((t_e / 15) - autoXY[x_or_y]) / 3;
 		}
@@ -260,11 +269,8 @@ int Auto_Runner(int t_e, int x_or_y, int enc_old, int enc_now) {
 		autoXY[x_or_y] = 0;
 	}
 
-	if (autoXY[x_or_y] >= 250) {
-		autoXY[x_or_y] = 250;
-	} else if (autoXY[x_or_y] <= -250) {
-		autoXY[x_or_y] = -250;
-	}
+	if      (autoXY[x_or_y] >=  250) autoXY[x_or_y] =  250;
+	else if (autoXY[x_or_y] <= -250) autoXY[x_or_y] = -250;
 
 	return autoXY[x_or_y];
 }
