@@ -11,9 +11,65 @@
 #define M_PI 3.1415926535
 #endif
 
+class Machine {
+private:
+	int anti_slip[2]  = {0},
+	    auto_runXY[2] = {0};
+
+public:
+
+	int motorDriver_Protecter(int IN_Mout) {
+		int ret;
+
+		if (IN_Mout > 499) {
+			ret = 499;
+		} else if (IN_Mout < -499) {
+			ret = -499;
+		} else {
+			ret = IN_Mout;
+		}
+		return ret;
+	}
+
+	int Anti_sliper(int XY_100, int i) {
+
+		if (XY_100 == 0) {
+			anti_slip[i] = XY_100;
+		} else {
+			anti_slip[i] += (XY_100 - anti_slip[i]) / 5;
+		}
+
+		return anti_slip[i];
+	}
+
+	int Auto_Runner(int t_e, int x_or_y, int enc_old, int enc_now) {
+		if (t_e >= 50 || t_e <= -50) {
+			if (enc_old - enc_now == 0) {
+
+				if      (auto_runXY[x_or_y] < 0) auto_runXY[x_or_y] -= 5;
+				else if (auto_runXY[x_or_y] > 0) auto_runXY[x_or_y] += 5;
+
+			} else {
+				auto_runXY[x_or_y] += ((t_e / 15) - auto_runXY[x_or_y]) / 3;
+			}
+		} else {
+			auto_runXY[x_or_y] = 0;
+		}
+
+		if      (auto_runXY[x_or_y] >=  250) auto_runXY[x_or_y] =  250;
+		else if (auto_runXY[x_or_y] <= -250) auto_runXY[x_or_y] = -250;
+
+		return auto_runXY[x_or_y];
+	}
+
+	void set_limit(int &value,int limit){
+		if (value > limit)  value = limit;
+		if (value < -limit) value = -limit;
+	}
+};
+
 
 class SensorTimer {
-
 public:
 	MainV3 *mainBoard;
 	MadgwickAHRS ahrs;
@@ -66,6 +122,7 @@ public:
 
 		}
 	}
+
 private:
 	int count = 0;
 	Timer6<Timer6InternalClockFeature, Timer6InterruptFeature> timer;
