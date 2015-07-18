@@ -14,7 +14,13 @@
 class Machine {
 private:
 	int anti_slip[2]  = {0},
-	    auto_runXY[2] = {0};
+	    auto_runXY[2] = {0},
+		XY_100         = 0;
+
+	float yaw_90value = 0,
+		  yaw_90old   = 0;
+
+	bool first_time = true;
 
 public:
 
@@ -31,7 +37,7 @@ public:
 		return ret;
 	}
 
-	int Anti_sliper(int XY_100, int i) {
+	int antiSlip(int XY_100, int i) {
 
 		if (XY_100 == 0) {
 			anti_slip[i] = XY_100;
@@ -43,29 +49,77 @@ public:
 	}
 
 	int Auto_Runner(int t_e, int x_or_y, int enc_old, int enc_now) {
-		if (t_e >= 50 || t_e <= -50) {
-			if (enc_old - enc_now == 0) {
+		if (t_e >= 10 || t_e <= -10) {
+			if (abs(enc_old - enc_now) < 10) {
 
-				if      (auto_runXY[x_or_y] < 0) auto_runXY[x_or_y] -= 5;
-				else if (auto_runXY[x_or_y] > 0) auto_runXY[x_or_y] += 5;
+				if      (auto_runXY[x_or_y] < 0) auto_runXY[x_or_y] -= 30;
+				else if (auto_runXY[x_or_y] > 0) auto_runXY[x_or_y] += 30;
 
-			} else {
-				auto_runXY[x_or_y] += ((t_e / 15) - auto_runXY[x_or_y]) / 3;
 			}
+				auto_runXY[x_or_y] += ((t_e / 15) - auto_runXY[x_or_y]) / 3;
+
 		} else {
 			auto_runXY[x_or_y] = 0;
 		}
 
-		if      (auto_runXY[x_or_y] >=  250) auto_runXY[x_or_y] =  250;
-		else if (auto_runXY[x_or_y] <= -250) auto_runXY[x_or_y] = -250;
+		setLimit(auto_runXY[x_or_y], 250);
 
 		return auto_runXY[x_or_y];
 	}
 
-	void set_limit(int &value,int limit){
-		if (value > limit)  value = limit;
-		if (value < -limit) value = -limit;
+	int rotateAngle90(float yaw_value,int mode){
+		int rotation_90 = 0;
+
+		if(first_time == true){
+			yaw_90old = yaw_value;
+			first_time = false;
+		}
+
+		if(abs(yaw_value - yaw_90old) < 20){
+			if(mode == 1) yaw_90value += abs(yaw_value - yaw_90old);
+			else if(mode == 2) yaw_90value -= abs(yaw_value - yaw_90old);
+		}
+
+		if(yaw_90value < 90) rotation_90 = 120 - yaw_90value;
+		else {
+			rotation_90 = 0;
+			//mainBoard.buzzer.set(-1, 6);
+		}
+
+		yaw_90old = yaw_value;
+
+		return rotation_90;
 	}
+
+	//Automatically adjust the distance between the object
+	int autoAdjustDistance(int distance,int target,int enc_now,int enc_old){
+
+		if (distance > target + 25 || distance < target - 25) {
+			XY_100 = (distance - target) / 3;
+
+			if(abs(enc_now - enc_old) < 10){
+				if(XY_100 > 0)      XY_100 += 30;
+				else if(XY_100 < 0) XY_100 -= 30;
+			}
+		}else{
+			XY_100 = 0;
+		}
+
+		setLimit(XY_100, 100);
+
+		return XY_100;
+	}
+
+	void resetRotateAngle90(){
+		first_time = true;
+		yaw_90value = 0;
+	}
+
+	void setLimit(int &value,int limit){
+		if (value > limit)  value = limit;
+		else if (value < -limit) value = -limit;
+	}
+
 };
 
 

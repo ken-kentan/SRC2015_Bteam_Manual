@@ -77,7 +77,7 @@ public:
 		}
 	}
 
-	int value_change(int IN_100) {
+	int convertValue(int IN_100) {
 		IN_100 = (IN_100 - 127.5) * 0.7843;
 		IN_100 *= 3;
 
