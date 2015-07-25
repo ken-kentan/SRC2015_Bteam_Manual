@@ -45,6 +45,7 @@ public:
 			ChannelB::setCompare(MAX_COMPARE);
 		}
 	}
+
 	inline void stop() {
 		set(0, 6);
 	}

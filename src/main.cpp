@@ -25,7 +25,7 @@ using namespace stm32plus;
 #define R_LIMIT 200
 #define R_Gyro_LIMIT 200
 #define SPEED_Linearly 150
-
+#define PWM 500
 
 int main(void) {
 	int encX      = 0,
@@ -40,10 +40,7 @@ int main(void) {
 	    rotation_90 = 0;
 
 	float yaw_now   = 0,
-		  yaw_old   = 0,
-		  yaw_value = 0,
-		  yaw_reset = 0,
-		  yaw_90value = 0;
+		  yaw_old   = 0;
 
 	bool Start = false;
 
@@ -70,12 +67,10 @@ int main(void) {
 	SensorTimer sensor_timer(&mainBoard);
 
 	Machine machine;
+	Gyro gyro;
 
 	while (1) {
 		int rotation_gyro = 0,
-			A_v           = 0,
-			B_v           = 0,
-			C_v           = 0,
 			A_out         = 0,
 			B_out         = 0,
 			C_out         = 0,
@@ -92,9 +87,7 @@ int main(void) {
 			if (Start == true) mainBoard.buzzer.set(-1, 6);
 
 			mainBoard.led.Flash();
-			char str[128];
-			sprintf(str, "Please push START button. \r\n");
-			debug << str;
+			debug << "Please push START button. \r\n";
 			MillisecondTimer::delay(50);
 			continue;
 		}
@@ -104,16 +97,8 @@ int main(void) {
 		encX_now = mainBoard.encoders.getCounter1();
 		encY_now = mainBoard.encoders.getCounter2();
 
-		if (encX_now - encX_old < 20000 && encX_now - encX_old > -20000) {
-			encX += encX_now - encX_old;
-		}else if(encX_now < 1000){
-			encX += encX_now;
-		}
-		if (encY_now - encY_old < 20000 && encY_now - encY_old > -20000) {
-			encY += encY_now - encY_old;
-		}else if(encY_now < 1000){
-			encY += encY_now;
-		}
+		encX += machine.extendEncValue(encX_now,encX_old,MODE_X);
+		encY += machine.extendEncValue(encY_now,encY_old,MODE_Y);
 
 		//Set TargetPoint of AutoRUN
 		if (ps3con->getButtonPress(TRIANGLE)) {
@@ -124,21 +109,16 @@ int main(void) {
 		sensor_timer.ahrs.getYaw(yaw_now);
 		yaw_now *= RAD_TO_DEG;
 
-		//GYRO Filter
-		if (yaw_now - yaw_old > 0.05 || yaw_now - yaw_old < -0.05){
-			yaw_value += yaw_now - yaw_old;
-		}
+		gyro.set(yaw_now,yaw_old);
 
-		rotation_gyro = (yaw_value - yaw_reset) * 17;
+		rotation_gyro = gyro.correct();
 
-		//GYRO Reset
 		if (ps3con->getButtonPress(CIRCLE)) {
-			yaw_reset = yaw_value;
-			rotation_gyro = 0;
+			gyro.reset(rotation_gyro);
 		}
 
 		//GYRO Add output when "cannot move"
-		if(abs(encX_now - encX_old) < 10){
+		if (machine.checkMove(MODE_X) == false){
 			if      (rotation_gyro > 0) rotation_gyro += 30;
 			else if (rotation_gyro < 0) rotation_gyro -= 30;
 		}
@@ -147,12 +127,12 @@ int main(void) {
 
 		//Rotate angle of 90
 		if (ps3con->getButtonPress(R1)) {
-			rotation_90 = machine.rotateAngle90(yaw_value,1);
+			rotation_90 = gyro.angle90(TURN_RIGHT);
 		}
 		else if (ps3con->getButtonPress(L1)) {
-			rotation_90 = machine.rotateAngle90(yaw_value,2);
+			rotation_90 = gyro.angle90(TURN_LEFT);
 		}else{
-			machine.resetRotateAngle90();
+			gyro.resetAngle90();
 		}
 
 		//Rotation
@@ -181,25 +161,25 @@ int main(void) {
 
 		//auto RUN
 		if (ps3con->getButtonPress(CROSS)) {
-			X_100 = machine.Auto_Runner(encX - targetX, 0, encX_old, encX_now);
-			Y_100 = machine.Auto_Runner(targetY - encY, 1, encY_old, encY_now);
+			X_100 = machine.Auto_Runner(encX - targetX, MODE_X, encX_old, encX_now);
+			Y_100 = machine.Auto_Runner(targetY - encY, MODE_Y, encY_old, encY_now);
 
 			if(X_100 == 0 && Y_100 == 0) mainBoard.buzzer.set(-1, 6);
 		}
 
-		X_100 = machine.antiSlip(X_100, 0);
-		Y_100 = machine.antiSlip(Y_100, 1);
+		X_100 = machine.antiSlip(X_100, MODE_X);
+		Y_100 = machine.antiSlip(Y_100, MODE_Y);
 
 		//motor
-		A_v = -Y_100 + X_100 / 2 + rotation + rotation_gyro + rotation_90;
-		B_v = Y_100 + X_100 / 2 + rotation + rotation_gyro + rotation_90;
-		C_v = -X_100 + rotation + rotation_gyro + rotation_90;
+		A_out = -Y_100 + X_100 / 2 + rotation + rotation_gyro + rotation_90;
+		B_out =  Y_100 + X_100 / 2 + rotation + rotation_gyro + rotation_90;
+		C_out = -X_100 +             rotation + rotation_gyro + rotation_90;
 
-		A_out = machine.motorDriver_Protecter(A_v);
-		B_out = machine.motorDriver_Protecter(B_v);
-		C_out = machine.motorDriver_Protecter(C_v);
+		machine.setLimit(A_out,PWM);
+		machine.setLimit(B_out,PWM);
+		machine.setLimit(C_out,PWM);
 
-		//Motor output
+		//PWM output
 		mainBoard.motorA.setOutput((float) A_out / 500.0);
 		mainBoard.motorB.setOutput((float) B_out / 500.0);
 		mainBoard.motorC.setOutput((float) C_out / 500.0);
@@ -210,7 +190,7 @@ int main(void) {
 
 		//debug
 		char str[128];
-		sprintf(str, "%.5f %.5f %.5f\r\n",(float)encX,(float)yaw_90value,(float)rotation_90);
+		sprintf(str, "%.5f %.5f\r\n",(float)encX,(float)rotation_90);
 		//sprintf(str, "%.5f %.5f %.5f %.5f %.5f\r\n", (float) A_out, (float) B_out,
 		//		(float)C_out, (float)X_100,(float)Y_100);
 		debug << str;
