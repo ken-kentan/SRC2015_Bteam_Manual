@@ -10,20 +10,29 @@
 #ifndef M_PI
 #define M_PI 3.1415926535
 #endif
+#define GYRO_P 15 //base 17
+#define GYRO_D 5
 
-	enum{
-		TURN_LEFT  = -1,
-		TURN_RIGHT =  1,
-		MODE_X = 0,
-		MODE_Y
-	};
+void setLimit(int &value,int limit);
+
+enum{
+	TURN_LEFT  = -1,
+	TURN_RIGHT =  1,
+	MODE_X     =  0,
+	MODE_Y         ,
+	X          =  0,
+	Y
+};
 
 class Machine {
-
 private:
 	int anti_slip[2]  = {},
 	    auto_runXY[2] = {},
+		enc[2]        = {},
+		enc_now[2]    = {},
+		enc_old[2]    = {},
 		enc_diff[2]   = {},
+		target_loc[2] = {},
 		XY_100        = 0;
 
 public:
@@ -31,7 +40,7 @@ public:
 	int antiSlip(int XY_100, int mode) {
 
 		if (XY_100 == 0) {
-			anti_slip[mode] = XY_100;
+			anti_slip[mode] = 0;
 		} else {
 			anti_slip[mode] += (XY_100 - anti_slip[mode]) / 5;
 		}
@@ -39,32 +48,39 @@ public:
 		return anti_slip[mode];
 	}
 
-	int Auto_Runner(int t_e, int x_or_y, int enc_old, int enc_now) {
-		if (t_e >= 10 || t_e <= -10) {
-			if (abs(enc_old - enc_now) < 10) {
+	int runToTarget(int mode) {
+		int target_distance = 0;
 
-				if      (auto_runXY[x_or_y] < 0) auto_runXY[x_or_y] -= 30;
-				else if (auto_runXY[x_or_y] > 0) auto_runXY[x_or_y] += 30;
+		target_distance = enc[mode] - target_loc[mode];
+		if(mode == MODE_Y) target_distance *= -1;
 
+		if (target_distance >= 10 || target_distance <= -10) {
+			if (checkMove(mode) == false) {
+				if      (auto_runXY[mode] < 0) auto_runXY[mode] -= 30;
+				else if (auto_runXY[mode] > 0) auto_runXY[mode] += 30;
 			}
-				auto_runXY[x_or_y] += ((t_e / 15) - auto_runXY[x_or_y]) / 3;
-
+				auto_runXY[mode] += ((target_distance / 15) - auto_runXY[mode]) / 3;
 		} else {
-			auto_runXY[x_or_y] = 0;
+			auto_runXY[mode] = 0;
 		}
 
-		setLimit(auto_runXY[x_or_y], 250);
+		setLimit(auto_runXY[mode], 250);
 
-		return auto_runXY[x_or_y];
+		return auto_runXY[mode];
+	}
+
+	void setTargetLocation(){
+		target_loc[MODE_X] = enc[MODE_X];
+		target_loc[MODE_Y] = enc[MODE_Y];
 	}
 
 	//Automatically adjust the distance between the object
-	int autoAdjustDistance(int distance,int target,int enc_now,int enc_old){
+	int adjustDistance(int distance,int target,int mode){
 
 		if (distance > target + 25 || distance < target - 25) {
 			XY_100 = (distance - target) / 3;
 
-			if(abs(enc_now - enc_old) < 10){
+			if(checkMove(mode) == false){
 				if(XY_100 > 0)      XY_100 += 30;
 				else if(XY_100 < 0) XY_100 -= 30;
 			}
@@ -77,18 +93,20 @@ public:
 		return XY_100;
 	}
 
-	int extendEncValue(int enc_now,int enc_old,int mode){
-		int enc = 0;
+	void extendEncValue(int now_value,int old_value,int mode){
+		int _enc = 0;
 
-		if (enc_now - enc_old < 20000 && enc_now - enc_old > -20000) {
-			enc = enc_now - enc_old;
-		}else if(enc_now < 1000){
-			enc = enc_now;
+		if (now_value - old_value < 20000 && now_value - old_value > -20000) {
+			_enc = now_value - old_value;
+		}else if(now_value < 1000){
+			_enc = now_value;
 		}
 
-		enc_diff[mode] = enc;
+		enc_now[mode] = now_value;
+		enc_old[mode] = old_value;
+		enc_diff[mode] = _enc;
 
-		return enc;
+		enc[mode] += _enc;
 	}
 
 	bool checkMove(int mode){
@@ -99,25 +117,22 @@ public:
 		return check;
 	}
 
-	void setLimit(int &value,int limit){
-		value = min(max(value, - limit), limit);
-	}
-
 };
 
 class Gyro{
 private:
-
-	float yaw_90value = 0,
-		  yaw_90old   = 0,
-		  yaw_value   = 0,
-		  yaw_reset   = 0;
+	float yaw_90value   = 0,
+		  yaw_90old     = 0,
+		  yaw_value     = 0,
+		  yaw_value_old = 0,
+		  yaw_reset     = 0;
 
 	bool first_time = true;
 
 public:
 	void set(float yaw_now,float yaw_old){
 		if (yaw_now - yaw_old > 0.05 || yaw_now - yaw_old < -0.05){
+			yaw_value_old = yaw_value;
 			yaw_value += yaw_now - yaw_old;
 		}
 	}
@@ -148,11 +163,13 @@ public:
 	}
 
 	int correct(){
-		int rotation = 0;
+		int rotation_P = 0,
+			rotation_D = 0;
 
-		rotation = (yaw_value - yaw_reset) * 17;
+		rotation_P = (yaw_value - yaw_reset) * GYRO_P;
+		rotation_D = ((yaw_value - yaw_value_old) - yaw_reset) * GYRO_D;
 
-		return rotation;
+		return rotation_P + rotation_D;
 	}
 
 	void reset(int &rotation){
@@ -216,3 +233,7 @@ private:
 	int count = 0;
 	Timer6<Timer6InternalClockFeature, Timer6InterruptFeature> timer;
 };
+
+void setLimit(int &value,int limit){
+	value = min(max(value, - limit), limit);
+}

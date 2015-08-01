@@ -21,23 +21,22 @@
 using namespace stm32plus;
 
 
-#define RAD_TO_DEG (180/M_PI)
-#define R_LIMIT 200
-#define R_Gyro_LIMIT 200
-#define SPEED_Linearly 150
-#define PWM 500
+#define RAD_TO_DEG      (180/M_PI)
+#define R_LIMIT         200
+#define R_Gyro_LIMIT    200
+#define SPEED_Linearly  150
+#define PWM_LIMIT       500
+#define WALL_DISTANCE   850
+#define OBJECT_DISTANCE 900
+
 
 int main(void) {
-	int encX      = 0,
-	    encY      = 0,
-	    encX_now  = 0,
-	    encY_now  = 0,
-	    encX_old  = 0,
-	    encY_old  = 0,
-	    rotation  = 0,
-	    targetX   = 0,
-	    targetY   = 0,
-	    rotation_90 = 0;
+	enum{
+		X,
+		Y
+	};
+	int enc_now[2]  = {},
+		enc_old[2]  = {};
 
 	float yaw_now   = 0,
 		  yaw_old   = 0;
@@ -71,6 +70,8 @@ int main(void) {
 
 	while (1) {
 		int rotation_gyro = 0,
+			rotation      = 0,
+			rotation_90   = 0,
 			A_out         = 0,
 			B_out         = 0,
 			C_out         = 0,
@@ -94,50 +95,39 @@ int main(void) {
 
 		mainBoard.led.On();
 
-		encX_now = mainBoard.encoders.getCounter1();
-		encY_now = mainBoard.encoders.getCounter2();
+		enc_now[X] = mainBoard.encoders.getCounter1();
+		enc_now[Y] = mainBoard.encoders.getCounter2();
 
-		encX += machine.extendEncValue(encX_now,encX_old,MODE_X);
-		encY += machine.extendEncValue(encY_now,encY_old,MODE_Y);
+		machine.extendEncValue(enc_now[X],enc_old[X],MODE_X);
+		machine.extendEncValue(enc_now[Y],enc_old[Y],MODE_Y);
 
-		//Set TargetPoint of AutoRUN
-		if (ps3con->getButtonPress(TRIANGLE)) {
-			targetX = encX;
-			targetY = encY;
-		}
+		//Set TargetLocation
+		if (ps3con->getButtonPress(TRIANGLE)) machine.setTargetLocation();
 
 		sensor_timer.ahrs.getYaw(yaw_now);
 		yaw_now *= RAD_TO_DEG;
-
 		gyro.set(yaw_now,yaw_old);
 
 		rotation_gyro = gyro.correct();
 
-		if (ps3con->getButtonPress(CIRCLE)) {
-			gyro.reset(rotation_gyro);
-		}
+		if (ps3con->getButtonPress(CIRCLE)) gyro.reset(rotation_gyro);
 
 		//GYRO Add output when "cannot move"
 		if (machine.checkMove(MODE_X) == false){
-			if      (rotation_gyro > 0) rotation_gyro += 30;
-			else if (rotation_gyro < 0) rotation_gyro -= 30;
+			if      (rotation_gyro > 0) rotation_gyro += 0;
+			else if (rotation_gyro < 0) rotation_gyro -= 0;
 		}
 
-		machine.setLimit(rotation_gyro,R_Gyro_LIMIT);
+		setLimit(rotation_gyro,R_Gyro_LIMIT);
 
-		//Rotate angle of 90
-		if (ps3con->getButtonPress(R1)) {
-			rotation_90 = gyro.angle90(TURN_RIGHT);
-		}
-		else if (ps3con->getButtonPress(L1)) {
-			rotation_90 = gyro.angle90(TURN_LEFT);
-		}else{
-			gyro.resetAngle90();
-		}
+		//Rotate (angle of 90)
+		if (ps3con->getButtonPress(R1))      rotation_90 = gyro.angle90(TURN_RIGHT);
+		else if (ps3con->getButtonPress(L1)) rotation_90 = gyro.angle90(TURN_LEFT);
+		else gyro.resetAngle90();
 
-		//Rotation
+		//Rotate (Normal)
 		rotation = ps3con->getAnalog(ANALOG_R2) - ps3con->getAnalog(ANALOG_L2);
-		machine.setLimit(rotation,R_LIMIT);
+		setLimit(rotation,R_LIMIT);
 
 		X_100 = ps3con->convertValue(ps3con->getAnalog(ANALOG_L_X));
 		Y_100 = ps3con->convertValue(ps3con->getAnalog(ANALOG_L_Y));
@@ -149,20 +139,20 @@ int main(void) {
 
 		//Automatically adjust the distance between the object
 		if (ps3con->getButtonPress(SQUARE) && ps3con->getButtonPress(UP)) {
-			Y_100 =  machine.autoAdjustDistance((int)mainBoard.ad[0]->get(),850,encY_now,encY_old);
+			Y_100 =  machine.adjustDistance((int)mainBoard.ad[0]->get(),OBJECT_DISTANCE,MODE_Y);
 			if(Y_100 == 0) mainBoard.buzzer.set(-1, 6);
 		}
 
 		//Automatically adjust the distance between the wall
 		if (ps3con->getButtonPress(SQUARE) && ps3con->getButtonPress(LEFT)) {
-			X_100 =  machine.autoAdjustDistance((int)mainBoard.ad[1]->get(),900,encX_now,encX_old);
+			X_100 =  machine.adjustDistance((int)mainBoard.ad[1]->get(),WALL_DISTANCE,MODE_X);
 			if(X_100 == 0) mainBoard.buzzer.set(-1, 6);
 		}
 
-		//auto RUN
+		//Automatically run to target
 		if (ps3con->getButtonPress(CROSS)) {
-			X_100 = machine.Auto_Runner(encX - targetX, MODE_X, encX_old, encX_now);
-			Y_100 = machine.Auto_Runner(targetY - encY, MODE_Y, encY_old, encY_now);
+			X_100 = machine.runToTarget(MODE_X);
+			Y_100 = machine.runToTarget(MODE_Y);
 
 			if(X_100 == 0 && Y_100 == 0) mainBoard.buzzer.set(-1, 6);
 		}
@@ -171,13 +161,13 @@ int main(void) {
 		Y_100 = machine.antiSlip(Y_100, MODE_Y);
 
 		//motor
-		A_out = -Y_100 + X_100 / 2 + rotation + rotation_gyro + rotation_90;
-		B_out =  Y_100 + X_100 / 2 + rotation + rotation_gyro + rotation_90;
-		C_out = -X_100 +             rotation + rotation_gyro + rotation_90;
+		A_out =  X_100 / 2 - Y_100 + rotation + rotation_gyro + rotation_90;
+		B_out =  X_100 / 2 + Y_100 + rotation + rotation_gyro + rotation_90;
+		C_out = -X_100             + rotation + rotation_gyro + rotation_90;
 
-		machine.setLimit(A_out,PWM);
-		machine.setLimit(B_out,PWM);
-		machine.setLimit(C_out,PWM);
+		setLimit(A_out,PWM_LIMIT);
+		setLimit(B_out,PWM_LIMIT);
+		setLimit(C_out,PWM_LIMIT);
 
 		//PWM output
 		mainBoard.motorA.setOutput((float) A_out / 500.0);
@@ -185,14 +175,12 @@ int main(void) {
 		mainBoard.motorC.setOutput((float) C_out / 500.0);
 
 		yaw_old = yaw_now;
-		encX_old = encX_now;
-		encY_old = encY_now;
+		enc_old[X] = enc_now[X];
+		enc_old[Y] = enc_now[Y];
 
 		//debug
 		char str[128];
-		sprintf(str, "%.5f %.5f\r\n",(float)encX,(float)rotation_90);
-		//sprintf(str, "%.5f %.5f %.5f %.5f %.5f\r\n", (float) A_out, (float) B_out,
-		//		(float)C_out, (float)X_100,(float)Y_100);
+		sprintf(str, "%.5f\r\n",yaw_old);
 		debug << str;
 
 		MillisecondTimer::delay(50);
