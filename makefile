@@ -188,9 +188,9 @@ else ifeq ($(EVAL_BOARD),USE_MAIN_V3)
  STM32PLUS_Fn = STM32PLUS_F407
  
  #FT232
- DEBUG_PORT = Usart2_Remap1
+ #DEBUG_PORT = Usart2_Remap1
  #XBee
- #DEBUG_PORT = Usart1_Remap1
+ DEBUG_PORT = Usart1_Remap1
  
  else ifeq ($(EVAL_BOARD),USE_STM32F4DISCOVERY)
  MPU_CLASS			= STM32F4XX

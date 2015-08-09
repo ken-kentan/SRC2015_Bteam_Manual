@@ -11,7 +11,7 @@
 #define M_PI 3.1415926535
 #endif
 #define GYRO_P 15 //base 17
-#define GYRO_D 5
+#define GYRO_D 0
 
 void setLimit(int &value,int limit);
 
@@ -70,8 +70,8 @@ public:
 	}
 
 	void setTargetLocation(){
-		target_loc[MODE_X] = enc[MODE_X];
-		target_loc[MODE_Y] = enc[MODE_Y];
+		target_loc[X] = enc[X];
+		target_loc[Y] = enc[Y];
 	}
 
 	//Automatically adjust the distance between the object
@@ -129,9 +129,11 @@ private:
 
 	bool first_time = true;
 
+	Machine machine;
+
 public:
 	void set(float yaw_now,float yaw_old){
-		if (yaw_now - yaw_old > 0.05 || yaw_now - yaw_old < -0.05){
+		if (yaw_now - yaw_old > 0.04 || yaw_now - yaw_old < -0.04){
 			yaw_value_old = yaw_value;
 			yaw_value += yaw_now - yaw_old;
 		}
@@ -145,15 +147,14 @@ public:
 			first_time = false;
 		}
 
-		if(abs(yaw_value - yaw_90old) < 20){
-			if(mode == TURN_RIGHT)     yaw_90value += abs(yaw_value - yaw_90old);
-			else if(mode == TURN_LEFT) yaw_90value -= abs(yaw_value - yaw_90old);
-		}
+		if(abs(yaw_value - yaw_90old) < 20) yaw_90value += abs(yaw_value - yaw_90old);
 
 		if(yaw_90value < 90) rotation_90 = 120 - yaw_90value;
 		else                 rotation_90 = 0;
 
 		yaw_90old = yaw_value;
+
+		if(mode == TURN_LEFT) rotation_90 *= -1;
 
 		return rotation_90;
 	}
@@ -163,20 +164,27 @@ public:
 	}
 
 	int correct(){
-		int rotation_P = 0,
+		int rotation_  = 0,
+			rotation_P = 0,
 			rotation_D = 0;
 
 		rotation_P = (yaw_value - yaw_reset) * GYRO_P;
-		rotation_D = ((yaw_value - yaw_value_old) - yaw_reset) * GYRO_D;
+		rotation_D = (yaw_value - yaw_value_old) * GYRO_D;
 
-		return rotation_P + rotation_D;
+		rotation_ = rotation_P + rotation_D;
+
+		if (machine.checkMove(MODE_X) == false){
+			if      (rotation_ > 0) rotation_ += 30;
+			else if (rotation_ < 0) rotation_ -= 30;
+		}
+
+		return rotation_;
 	}
 
 	void reset(int &rotation){
 		yaw_reset = yaw_value;
 		rotation = 0;
 	}
-
 };
 
 

@@ -14,9 +14,12 @@
 #include "config/timing.h"
 #include "utils/debug.h"
 #include "board/main_v3.h"
-#include "devices/can/ps3con.h"
+
 #include "machine/machine.h"
+
 #include "devices/buzzer.h"
+#include "devices/can/ps3con.h"
+#include "devices/can/canservo.h"
 
 using namespace stm32plus;
 
@@ -31,10 +34,6 @@ using namespace stm32plus;
 
 
 int main(void) {
-	enum{
-		X,
-		Y
-	};
 	int enc_now[2]  = {},
 		enc_old[2]  = {};
 
@@ -56,12 +55,24 @@ int main(void) {
 
 	mainBoard.can.AddListenerNode(ps3con);
 
+	CanServo canservo(&mainBoard.can);
+
+	canservo.Set(0);
+	canservo.Update();
+	MillisecondTimer::delay(1000);
+	canservo.Reset(0);
+	canservo.Update();
+
 	mainBoard.mpu6050.setTimeout(20);
 
-	while (!mainBoard.mpu6050.test())
-		;
+	debug<<"[INFO]Testing MPU6050...\r\n";
+	while(!mainBoard.mpu6050.test());
+	debug<<"[INFO]MPU6050 test passed.\r\n";
+
+	debug<<"[INFO]Setting up MPU6050...\r\n";
 	mainBoard.mpu6050.setup();
 	mainBoard.mpu6050.setGyrRange(mainBoard.mpu6050.GYR_RANGE_500DPS);
+	debug<<"[INFO]Setup complete!\r\n";
 
 	SensorTimer sensor_timer(&mainBoard);
 
@@ -83,12 +94,17 @@ int main(void) {
 
 		//Safety start
 		if (Start == false || ps3con->getButtonPress(CONNECTED) == 0) {
-			if (ps3con->getButtonPress(START)) Start = true;
+			if (ps3con->getButtonPress(START)){
+				Start = true;
+				debug << "[INFO]Safety Launch success!\r\n";
+			}else{
+				debug << "[WARN]Please push START button.\r\n";
+			}
 
 			if (Start == true) mainBoard.buzzer.set(-1, 6);
 
 			mainBoard.led.Flash();
-			debug << "Please push START button. \r\n";
+
 			MillisecondTimer::delay(50);
 			continue;
 		}
@@ -111,12 +127,6 @@ int main(void) {
 		rotation_gyro = gyro.correct();
 
 		if (ps3con->getButtonPress(CIRCLE)) gyro.reset(rotation_gyro);
-
-		//GYRO Add output when "cannot move"
-		if (machine.checkMove(MODE_X) == false){
-			if      (rotation_gyro > 0) rotation_gyro += 0;
-			else if (rotation_gyro < 0) rotation_gyro -= 0;
-		}
 
 		setLimit(rotation_gyro,R_Gyro_LIMIT);
 
@@ -161,9 +171,9 @@ int main(void) {
 		Y_100 = machine.antiSlip(Y_100, MODE_Y);
 
 		//motor
-		A_out =  X_100 / 2 - Y_100 + rotation + rotation_gyro + rotation_90;
-		B_out =  X_100 / 2 + Y_100 + rotation + rotation_gyro + rotation_90;
-		C_out = -X_100             + rotation + rotation_gyro + rotation_90;
+		A_out =  X_100 / 2 - Y_100 * sqrt(3) / 2 + rotation + rotation_gyro + rotation_90;
+		B_out =  X_100 / 2 + Y_100 * sqrt(3) / 2 + rotation + rotation_gyro + rotation_90;
+		C_out = -X_100                           + rotation + rotation_gyro + rotation_90;
 
 		setLimit(A_out,PWM_LIMIT);
 		setLimit(B_out,PWM_LIMIT);
@@ -180,7 +190,7 @@ int main(void) {
 
 		//debug
 		char str[128];
-		sprintf(str, "%.5f\r\n",yaw_old);
+		sprintf(str, "[DEBUG]PS3con:%d,%d omniPWM:%d,%d,%d Gyro:%d Rotate:%d Rotate90:%d\r\n",X_100,Y_100,A_out,B_out,C_out,rotation_gyro,rotation,rotation_90);
 		debug << str;
 
 		MillisecondTimer::delay(50);
