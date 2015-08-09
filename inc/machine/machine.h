@@ -121,7 +121,7 @@ public:
 
 class Gyro{
 private:
-	int count_180 = 0;
+	int   count_180     = 0;
 	float yaw_90value   = 0,
 		  yaw_90old     = 0,
 		  yaw_value     = 0,
@@ -137,10 +137,10 @@ public:
 		if (yaw_now - yaw_old > 0.04 || yaw_now - yaw_old < -0.04){
 			yaw_value_old = yaw_value;
 
-			if(abs(yaw_now + yaw_old) < 20){
+			if(abs(yaw_now + yaw_old) < 20 && (yaw_now < -150 || yaw_now > 150)){
 
-				if(yaw_old > 150 && yaw_now < -150)      count_180++;
-				else if(yaw_old < -150 && yaw_now > 150) count_180--;
+				if(yaw_old > 150)       count_180++;
+				else if(yaw_old < -150) count_180--;
 
 				yaw_value += 180 * count_180 + yaw_now + (180 * count_180 - yaw_value);
 			}else{
