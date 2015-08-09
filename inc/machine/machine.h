@@ -139,8 +139,8 @@ public:
 
 			if(abs(yaw_now + yaw_old) < 20){
 
-				if(yaw_old > 150 && yaw_now < -150)       count_180++;
-				else if(yaw_old < -150 && yaw_now > -150) count_180--;
+				if(yaw_old > 150 && yaw_now < -150)      count_180++;
+				else if(yaw_old < -150 && yaw_now > 150) count_180--;
 
 				yaw_value += 180 * count_180 + yaw_now + (180 * count_180 - yaw_value);
 			}else{
