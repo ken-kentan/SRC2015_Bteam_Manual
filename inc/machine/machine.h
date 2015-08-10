@@ -7,6 +7,8 @@
 #include "control/controlTimer.h"
 #include "utils/MadgwickAHRS.h"
 
+#include "machine/kalman.h"
+
 #ifndef M_PI
 #define M_PI 3.1415926535
 #endif
@@ -52,12 +54,11 @@ public:
 		int target_distance = 0;
 
 		target_distance = enc[mode] - target_loc[mode];
-		if(mode == MODE_Y) target_distance *= -1;
 
 		if (target_distance >= 10 || target_distance <= -10) {
 			if (checkMove(mode) == false) {
-				if      (auto_runXY[mode] < 0) auto_runXY[mode] -= 30;
-				else if (auto_runXY[mode] > 0) auto_runXY[mode] += 30;
+				if      (auto_runXY[mode] < 0) auto_runXY[mode] -= 35;
+				else if (auto_runXY[mode] > 0) auto_runXY[mode] += 35;
 			}
 				auto_runXY[mode] += ((target_distance / 15) - auto_runXY[mode]) / 3;
 		} else {
@@ -81,8 +82,8 @@ public:
 			XY_100 = (distance - target) / 3;
 
 			if(checkMove(mode) == false){
-				if(XY_100 > 0)      XY_100 += 30;
-				else if(XY_100 < 0) XY_100 -= 30;
+				if(XY_100 > 0)      XY_100 += 20;
+				else if(XY_100 < 0) XY_100 -= 20;
 			}
 		}else{
 			XY_100 = 0;
@@ -134,6 +135,7 @@ private:
 
 public:
 	void set(float yaw_now,float yaw_old){
+
 		if (yaw_now - yaw_old > 0.04 || yaw_now - yaw_old < -0.04){
 			yaw_value_old = yaw_value;
 
@@ -147,6 +149,7 @@ public:
 				yaw_value += yaw_now - yaw_old;
 			}
 		}
+
 	}
 
 	int angle90(int mode){
@@ -184,8 +187,8 @@ public:
 		rotation_ = rotation_P + rotation_D;
 
 		if (machine.checkMove(MODE_X) == false){
-			if      (rotation_ > 0) rotation_ += 30;
-			else if (rotation_ < 0) rotation_ -= 30;
+			if      (rotation_ > 0) rotation_ += 2;
+			else if (rotation_ < 0) rotation_ -= 2;
 		}
 
 		return rotation_;

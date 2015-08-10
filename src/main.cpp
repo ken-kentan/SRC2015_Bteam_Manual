@@ -16,6 +16,7 @@
 #include "board/main_v3.h"
 
 #include "machine/machine.h"
+#include "machine/kalman_filter.h"
 
 #include "devices/buzzer.h"
 #include "devices/can/ps3con.h"
@@ -55,6 +56,17 @@ int main(void) {
 
 	mainBoard.can.AddListenerNode(ps3con);
 
+	//set offset(kalman filter)
+	KalmanFilter kalman_filter;
+		int32_t offset = 0;
+		for(int i=0;i<30;i++){
+			offset += kalman_filter.mpu6050.readGyrZ();
+			MillisecondTimer::delay(1);
+		}
+		offset = offset/30;
+		kalman_filter.setOffset(offset);
+		kalman_filter.ResetState();
+
 	CanServo canservo(&mainBoard.can);
 
 	canservo.Set(0);
@@ -86,6 +98,7 @@ int main(void) {
 			A_out         = 0,
 			B_out         = 0,
 			C_out         = 0,
+			D_out         = 0,
 			X_100         = 0,
 			Y_100         = 0;
 
@@ -96,7 +109,7 @@ int main(void) {
 		if (Start == false || ps3con->getButtonPress(CONNECTED) == 0) {
 			if (ps3con->getButtonPress(START)){
 				Start = true;
-				debug << "[INFO]Safety Launch success!\r\n";
+				debug << "[INFO]Safety launch success!\r\n";
 			}else{
 				debug << "[WARN]Please push START button.\r\n";
 			}
@@ -122,7 +135,7 @@ int main(void) {
 
 		sensor_timer.ahrs.getYaw(yaw_now);
 		yaw_now *= RAD_TO_DEG;
-		gyro.set(yaw_now,yaw_old);
+		gyro.set(sensor_timer.ahrs.getYaw(yaw_now) * RAD_TO_DEG,yaw_old);
 
 		rotation_gyro = gyro.correct();
 
@@ -178,11 +191,13 @@ int main(void) {
 		setLimit(A_out,PWM_LIMIT);
 		setLimit(B_out,PWM_LIMIT);
 		setLimit(C_out,PWM_LIMIT);
+		setLimit(D_out,PWM_LIMIT);
 
 		//PWM output
 		mainBoard.motorA.setOutput((float) A_out / 500.0);
 		mainBoard.motorB.setOutput((float) B_out / 500.0);
 		mainBoard.motorC.setOutput((float) C_out / 500.0);
+		//mainBoard.motorD.setOutput((float) D_out / 500.0);
 
 		yaw_old = yaw_now;
 		enc_old[X] = enc_now[X];
@@ -190,7 +205,8 @@ int main(void) {
 
 		//debug
 		char str[128];
-		sprintf(str, "[DEBUG]PS3con:%d,%d omniPWM:%d,%d,%d Gyro:%d Rotate:%d Rotate90:%d\r\n",X_100,Y_100,A_out,B_out,C_out,rotation_gyro,rotation,rotation_90);
+		//sprintf(str, "[DEBUG]PS3con:%d,%d omniPWM:%d,%d,%d Gyro:%d Rotate:%d Rotate90:%d\r\n",X_100,Y_100,A_out,B_out,C_out,rotation_gyro,rotation,rotation_90);
+		sprintf(str,"[TEST]%.5f",gyro.test_return());
 		debug << str;
 
 		MillisecondTimer::delay(50);
