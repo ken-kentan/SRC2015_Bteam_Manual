@@ -304,6 +304,13 @@ public:
 	GpioE<
 			DigitalInputFeature<GPIO_Speed_50MHz, Gpio::PUPD_UP, 1, 2, 3, 4, 12,
 					13, 14, 15> > pe;
+
+	GpioB<DefaultDigitalOutputFeature<0,1,2> >pb;
+
+	Servo servoA;
+	Servo servoB;
+	Servo servoC;
+
 	Button button1;
 	Button button2;
 	Button button3;
@@ -359,6 +366,7 @@ public:
 					pe[3], false), button4(pe[4], false), toggle1(pe[12], true), toggle2(
 					pe[13], true), toggle3(pe[14], true), toggle4(pe[15], true), can(), encoders(), mpu6050(
 					I2C::Parameters(100000)) // 100kHz
+					,servoA(pb[0]),servoB(pb[1]),servoC(pb[2])
 #if DEBUG_PORT != Usart1_Remap1
 	,com()
 #endif

@@ -3,6 +3,7 @@
  *
  *  Created on: 2014/10/05
  *      Author: spiralray
+ *      customed:ken_kentan
  */
 
 #pragma once
@@ -32,6 +33,22 @@ public:
 		MillisecondTimer::delay(200);
 		Off();
 		MillisecondTimer::delay(200);
+	}
+};
+
+class Servo {
+private:
+	GpioPinRef pin;
+public:
+	Servo(GpioPinRef _pin) {
+		pin = _pin;
+	}
+
+	void On() {
+		pin.set();
+	}
+	void Off() {
+		pin.reset();
 	}
 };
 

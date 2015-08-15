@@ -42,21 +42,6 @@ public:
 	//割り込みハンドラ
 	void ctrlHandler(TimerEventType te,uint8_t timerNumber){
 
-		//encoder
-		enc_n[0] = encoders.getCounter1();
-		enc_n[1] = encoders.getCounter2();
-		enc_n[2] = encoders.getCounter3();
-
-		speed[0] = (int32_t)(enc_n[0] - enc_p[0]);
-		speed[1] = (int32_t)(enc_n[1] - enc_p[1]);
-		speed[2] = (int32_t)(enc_n[2] - enc_p[2]);
-		for(int i=0;i<3;i++){
-			if(speed[i] > 30000 || speed[i] < -30000)
-				speed[i] = speed_p[i];
-			enc_p[i] = enc_n[i];
-			speed_p[i] = speed[i];
-		}
-
 		//mpu
 		/*
 		GyrZ = mpu6050.readGyrZ() - offset_GyrZ;

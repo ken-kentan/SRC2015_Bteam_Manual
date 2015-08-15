@@ -200,6 +200,69 @@ public:
 	}
 };
 
+class Build{
+private:
+	int b_mode = -1;
+
+	MainV3 mainBoard;
+
+public:
+	void changeMode(int get_mode = 99){
+		if(get_mode == 99) b_mode++;
+
+		switch(b_mode){
+		case 0:
+		case 4:
+		case 8:
+			mainBoard.servoA.On();//Arm open.
+			mainBoard.servoB.Off();
+			mainBoard.servoC.Off();
+			break;
+		case 1:
+		case 5:
+		case 9:
+			mainBoard.servoA.On();
+			mainBoard.servoB.On();//Get objetc
+			mainBoard.servoC.Off();
+			break;
+		case 2:
+		case 6:
+		case 10:
+			mainBoard.servoA.Off();//Arm close
+			mainBoard.servoB.On();
+			mainBoard.servoC.Off();
+			break;
+		case 3:
+		case 7:
+		case 11:
+			mainBoard.servoA.Off();
+			mainBoard.servoB.Off();//Release object
+			mainBoard.servoC.Off();
+			break;
+		case 12:
+			mainBoard.servoA.Off();
+			mainBoard.servoB.Off();
+			mainBoard.servoC.On();//Push capital
+			break;
+		default:
+			b_mode = -1;
+			mainBoard.servoA.Off();
+			mainBoard.servoB.Off();
+			mainBoard.servoC.Off();
+			break;
+		}
+	}
+
+	int getMode(){
+		return b_mode;
+	}
+
+	void Reset(){
+		b_mode = -1;
+		changeMode(-1);
+	}
+};
+
 
 class SensorTimer {
 public:

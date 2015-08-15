@@ -20,8 +20,8 @@ namespace stm32plus{
     CanServo(CanRoot *_can){
       can = _can;
 
-      TxMessage.StdId = 0x170;
-      TxMessage.ExtId = 0x01;
+      TxMessage.StdId = 0x421;
+      TxMessage.ExtId = 0x01;//0x01
       TxMessage.RTR = CAN_RTR_DATA;
       TxMessage.IDE = CAN_ID_STD;
       TxMessage.DLC = 1;

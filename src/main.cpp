@@ -20,7 +20,6 @@
 
 #include "devices/buzzer.h"
 #include "devices/can/ps3con.h"
-#include "devices/can/canservo.h"
 
 using namespace stm32plus;
 
@@ -42,6 +41,9 @@ int main(void) {
 		  yaw_old   = 0;
 
 	bool Start = false;
+
+	int test = 0,
+		servo_mode = -1;
 
 	//Initialise Systick
 	MillisecondTimer::initialise();
@@ -67,14 +69,6 @@ int main(void) {
 		kalman_filter.setOffset(offset);
 		kalman_filter.ResetState();
 
-	CanServo canservo(&mainBoard.can);
-
-	canservo.Set(0);
-	canservo.Update();
-	MillisecondTimer::delay(1000);
-	canservo.Reset(0);
-	canservo.Update();
-
 	mainBoard.mpu6050.setTimeout(20);
 
 	debug<<"[INFO]Testing MPU6050...\r\n";
@@ -90,6 +84,10 @@ int main(void) {
 
 	Machine machine;
 	Gyro gyro;
+	Build build;
+
+	//Reset
+	build.Reset();
 
 	while (1) {
 		int rotation_gyro = 0,
@@ -188,25 +186,38 @@ int main(void) {
 		B_out =  X_100 / 2 + Y_100 * sqrt(3) / 2 + rotation + rotation_gyro + rotation_90;
 		C_out = -X_100                           + rotation + rotation_gyro + rotation_90;
 
+		D_out = -ps3con->convertValue(ps3con->getAnalog(ANALOG_R_Y)) * 2;
+
 		setLimit(A_out,PWM_LIMIT);
 		setLimit(B_out,PWM_LIMIT);
 		setLimit(C_out,PWM_LIMIT);
-		setLimit(D_out,PWM_LIMIT);
+		setLimit(D_out,500);
 
 		//PWM output
 		mainBoard.motorA.setOutput((float) A_out / 500.0);
 		mainBoard.motorB.setOutput((float) B_out / 500.0);
 		mainBoard.motorC.setOutput((float) C_out / 500.0);
-		//mainBoard.motorD.setOutput((float) D_out / 500.0);
+		mainBoard.motorD.setOutput((float) D_out / 500.0);
 
 		yaw_old = yaw_now;
 		enc_old[X] = enc_now[X];
 		enc_old[Y] = enc_now[Y];
 
+
+		//Build capital (TEST)
+		if(ps3con->getButtonPress(CIRCLE) && test == 0){
+			build.changeMode();
+			test = 1;
+		}
+		if(test != 0){
+			test++;
+			if(test >10)test = 0;
+		}
+
 		//debug
 		char str[128];
 		//sprintf(str, "[DEBUG]PS3con:%d,%d omniPWM:%d,%d,%d Gyro:%d Rotate:%d Rotate90:%d\r\n",X_100,Y_100,A_out,B_out,C_out,rotation_gyro,rotation,rotation_90);
-		sprintf(str,"[TEST]%.5f",gyro.test_return());
+		sprintf(str,"[TEST]%.5f\r\n",kalman_filter.getKalmanYaw());
 		debug << str;
 
 		MillisecondTimer::delay(50);
