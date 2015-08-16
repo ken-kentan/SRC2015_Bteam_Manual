@@ -42,8 +42,7 @@ int main(void) {
 
 	bool Start = false;
 
-	int test = 0,
-		servo_mode = -1;
+	int test = 0;
 
 	//Initialise Systick
 	MillisecondTimer::initialise();
@@ -186,12 +185,13 @@ int main(void) {
 		B_out =  X_100 / 2 + Y_100 * sqrt(3) / 2 + rotation + rotation_gyro + rotation_90;
 		C_out = -X_100                           + rotation + rotation_gyro + rotation_90;
 
-		D_out = -ps3con->convertValue(ps3con->getAnalog(ANALOG_R_Y)) * 2;
+		//D_out = -ps3con->convertValue(ps3con->getAnalog(ANALOG_R_Y)) * 2;
+		D_out = build.pwmArm((int)mainBoard.ad[2]->get());
 
 		setLimit(A_out,PWM_LIMIT);
 		setLimit(B_out,PWM_LIMIT);
 		setLimit(C_out,PWM_LIMIT);
-		setLimit(D_out,500);
+		setLimit(D_out,PWM_LIMIT);
 
 		//PWM output
 		mainBoard.motorA.setOutput((float) A_out / 500.0);

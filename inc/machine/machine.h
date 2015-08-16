@@ -10,10 +10,17 @@
 #include "machine/kalman.h"
 
 #ifndef M_PI
-#define M_PI 3.1415926535
+#define M_PI       3.1415926535
 #endif
-#define GYRO_P 15 //base 17
-#define GYRO_D 0
+#define GYRO_P     15 //base 17
+#define GYRO_D      0
+#define HEIGHT_DEF  0
+#define HEIGHT_TOP  0
+#define HEIGHT_STAY 0
+#define HEIGHT_GET  0
+#define HEIGHT_OB1  0
+#define HEIGHT_OB2  0
+#define HEIGHT_OB3  0
 
 void setLimit(int &value,int limit);
 
@@ -202,7 +209,11 @@ public:
 
 class Build{
 private:
-	int b_mode = -1;
+	int b_mode        = -1,
+		target_height =  0,
+		pwm_arm       =  0;
+
+	bool completed    = false;
 
 	MainV3 mainBoard;
 
@@ -221,6 +232,7 @@ public:
 		case 1:
 		case 5:
 		case 9:
+			if(completed == false) break;
 			mainBoard.servoA.On();
 			mainBoard.servoB.On();//Get objetc
 			mainBoard.servoC.Off();
@@ -235,6 +247,7 @@ public:
 		case 3:
 		case 7:
 		case 11:
+			if(completed == false) break;
 			mainBoard.servoA.Off();
 			mainBoard.servoB.Off();//Release object
 			mainBoard.servoC.Off();
@@ -251,6 +264,61 @@ public:
 			mainBoard.servoC.Off();
 			break;
 		}
+	}
+
+	int pwmArm(int potentiometer){
+
+		switch(b_mode){
+		case -1:
+			target_height = HEIGHT_DEF;
+			break;
+		//Arm open
+		case 0:
+		case 4:
+		case 8:
+			target_height = HEIGHT_STAY;
+			break;
+		//Get object
+		case 1:
+		case 5:
+		case 9:
+			target_height = HEIGHT_GET;
+			break;
+		//Arm close
+		case 2:
+		case 6:
+		case 10:
+			target_height = HEIGHT_STAY;
+			break;
+		//Release object
+		case 3:
+			target_height = HEIGHT_OB1;
+			break;
+		case 7:
+			target_height = HEIGHT_OB2;
+			break;
+		case 11:
+			target_height = HEIGHT_OB3;
+			break;
+		case 12://Push capital
+			target_height = HEIGHT_TOP;
+			break;
+		default:
+			break;
+		}
+
+		if(target_height == potentiometer){
+			completed = true;
+			pwm_arm = 0;
+		}
+		else {
+			completed = false;
+			pwm_arm += ((target_height - potentiometer) - pwm_arm) / 4;
+		}
+
+		pwm_arm *= 1;
+
+		return pwm_arm;
 	}
 
 	int getMode(){
