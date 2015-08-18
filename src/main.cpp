@@ -20,6 +20,7 @@
 
 #include "devices/buzzer.h"
 #include "devices/can/ps3con.h"
+#include "devices/spimotor.h"
 
 using namespace stm32plus;
 
@@ -35,14 +36,13 @@ using namespace stm32plus;
 
 int main(void) {
 	int enc_now[2]  = {},
-		enc_old[2]  = {};
+		enc_old[2]  = {},
+		push_time   = 0;
 
 	float yaw_now   = 0,
 		  yaw_old   = 0;
 
 	bool Start = false;
-
-	int test = 0;
 
 	//Initialise Systick
 	MillisecondTimer::initialise();
@@ -50,6 +50,7 @@ int main(void) {
 	Nvic::initialise();
 
 	MainV3 mainBoard;
+	SpiMotor spimotor( *mainBoard.spi3v1, 0);
 
 	MillisecondTimer::delay(100);
 
@@ -70,9 +71,9 @@ int main(void) {
 
 	mainBoard.mpu6050.setTimeout(20);
 
-	debug<<"[INFO]Testing MPU6050...\r\n";
+	debug<<"[INFO]push_timeing MPU6050...\r\n";
 	while(!mainBoard.mpu6050.test());
-	debug<<"[INFO]MPU6050 test passed.\r\n";
+	debug<<"[INFO]MPU6050 push_time passed.\r\n";
 
 	debug<<"[INFO]Setting up MPU6050...\r\n";
 	mainBoard.mpu6050.setup();
@@ -96,6 +97,7 @@ int main(void) {
 			B_out         = 0,
 			C_out         = 0,
 			D_out         = 0,
+			SPI_out       = 0,
 			X_100         = 0,
 			Y_100         = 0;
 
@@ -114,6 +116,10 @@ int main(void) {
 			if (Start == true) mainBoard.buzzer.set(-1, 6);
 
 			mainBoard.led.Flash();
+
+			D_out = build.pwmArm((int)mainBoard.ad[2]->get());
+			setLimit(D_out,PWM_LIMIT);
+			mainBoard.motorD.setOutput((float) D_out / 500.0);
 
 			MillisecondTimer::delay(50);
 			continue;
@@ -177,6 +183,18 @@ int main(void) {
 			if(X_100 == 0 && Y_100 == 0) mainBoard.buzzer.set(-1, 6);
 		}
 
+		//Build capital (push_time)
+		if(ps3con->getButtonPress(CIRCLE) && push_time == 0){
+			build.changeMode();
+			push_time = 1;
+		}
+		build.changeMode(999);
+
+		if(push_time != 0){
+			push_time++;
+			if(push_time >10)push_time = 0;
+		}
+
 		X_100 = machine.antiSlip(X_100, MODE_X);
 		Y_100 = machine.antiSlip(Y_100, MODE_Y);
 
@@ -185,39 +203,31 @@ int main(void) {
 		B_out =  X_100 / 2 + Y_100 * sqrt(3) / 2 + rotation + rotation_gyro + rotation_90;
 		C_out = -X_100                           + rotation + rotation_gyro + rotation_90;
 
-		//D_out = -ps3con->convertValue(ps3con->getAnalog(ANALOG_R_Y)) * 2;
-		D_out = build.pwmArm((int)mainBoard.ad[2]->get());
+		D_out = -ps3con->convertValue(ps3con->getAnalog(ANALOG_R_Y)) * 2;
+		D_out   += build.pwmArm((int)mainBoard.ad[2]->get());
+		SPI_out = build.pwmPlate((int)mainBoard.ad[3]->get());
 
 		setLimit(A_out,PWM_LIMIT);
 		setLimit(B_out,PWM_LIMIT);
 		setLimit(C_out,PWM_LIMIT);
 		setLimit(D_out,PWM_LIMIT);
+		setLimit(SPI_out,PWM_LIMIT);
 
 		//PWM output
 		mainBoard.motorA.setOutput((float) A_out / 500.0);
 		mainBoard.motorB.setOutput((float) B_out / 500.0);
 		mainBoard.motorC.setOutput((float) C_out / 500.0);
 		mainBoard.motorD.setOutput((float) D_out / 500.0);
+		spimotor.setOutput((float)SPI_out/500.0);
 
 		yaw_old = yaw_now;
 		enc_old[X] = enc_now[X];
 		enc_old[Y] = enc_now[Y];
 
-
-		//Build capital (TEST)
-		if(ps3con->getButtonPress(CIRCLE) && test == 0){
-			build.changeMode();
-			test = 1;
-		}
-		if(test != 0){
-			test++;
-			if(test >10)test = 0;
-		}
-
 		//debug
 		char str[128];
 		//sprintf(str, "[DEBUG]PS3con:%d,%d omniPWM:%d,%d,%d Gyro:%d Rotate:%d Rotate90:%d\r\n",X_100,Y_100,A_out,B_out,C_out,rotation_gyro,rotation,rotation_90);
-		sprintf(str,"[TEST]%.5f\r\n",kalman_filter.getKalmanYaw());
+		sprintf(str,"[TETS]%d %d %d %s\r\n",(int)mainBoard.ad[2]->get(),D_out,build.getMode(),build.getComp()?"true":"false");
 		debug << str;
 
 		MillisecondTimer::delay(50);

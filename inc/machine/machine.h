@@ -12,15 +12,20 @@
 #ifndef M_PI
 #define M_PI       3.1415926535
 #endif
+
 #define GYRO_P     15 //base 17
 #define GYRO_D      0
-#define HEIGHT_DEF  0
-#define HEIGHT_TOP  0
-#define HEIGHT_STAY 0
-#define HEIGHT_GET  0
-#define HEIGHT_OB1  0
-#define HEIGHT_OB2  0
-#define HEIGHT_OB3  0
+
+#define HEIGHT_DEF  2635
+#define HEIGHT_TOP  3667
+#define HEIGHT_STAY 2200
+#define HEIGHT_GET  1880
+#define HEIGHT_OB1  2635
+#define HEIGHT_OB2  2635
+#define HEIGHT_OB3  2635
+
+#define PLATE_TOP    0
+#define PLATE_BOTTOM 0
 
 void setLimit(int &value,int limit);
 
@@ -209,22 +214,35 @@ public:
 
 class Build{
 private:
-	int b_mode        = -1,
-		target_height =  0,
-		pwm_arm       =  0;
+	int b_mode            = -1,
+		target_height     =  0,
+		potentiometer_old = 0,
+		cnt_ture_arm      = 0;
 
-	bool completed    = false;
+	float
+		pwm_arm       =  0,
+		pwm_plate     =  0;
+
+	bool completed_arm  = false,
+		 completed_plate = false;
 
 	MainV3 mainBoard;
 
 public:
 	void changeMode(int get_mode = 99){
-		if(get_mode == 99) b_mode++;
+		if(get_mode == 99){
+			b_mode++;
+		}else if(get_mode != 999){
+			b_mode = get_mode;
+		}
+
+		cnt_ture_arm++;
 
 		switch(b_mode){
 		case 0:
 		case 4:
 		case 8:
+			cnt_ture_arm = 0;
 			mainBoard.servoA.On();//Arm open.
 			mainBoard.servoB.Off();
 			mainBoard.servoC.Off();
@@ -232,7 +250,8 @@ public:
 		case 1:
 		case 5:
 		case 9:
-			if(completed == false) break;
+			if(completed_arm == false || cnt_ture_arm < 5) break;
+			cnt_ture_arm = 0;
 			mainBoard.servoA.On();
 			mainBoard.servoB.On();//Get objetc
 			mainBoard.servoC.Off();
@@ -240,6 +259,7 @@ public:
 		case 2:
 		case 6:
 		case 10:
+			cnt_ture_arm = 0;
 			mainBoard.servoA.Off();//Arm close
 			mainBoard.servoB.On();
 			mainBoard.servoC.Off();
@@ -247,15 +267,17 @@ public:
 		case 3:
 		case 7:
 		case 11:
-			if(completed == false) break;
+			if(completed_arm == false || cnt_ture_arm < 5) break;
+			cnt_ture_arm = 0;
 			mainBoard.servoA.Off();
 			mainBoard.servoB.Off();//Release object
 			mainBoard.servoC.Off();
 			break;
 		case 12:
-			mainBoard.servoA.Off();
+			if(completed_plate == false) break;
+			mainBoard.servoA.On();
 			mainBoard.servoB.Off();
-			mainBoard.servoC.On();//Push capital
+			mainBoard.servoC.On();//plate capital
 			break;
 		default:
 			b_mode = -1;
@@ -286,9 +308,13 @@ public:
 			break;
 		//Arm close
 		case 2:
+			target_height = HEIGHT_OB1 + 500;
+			break;
 		case 6:
+			target_height = HEIGHT_OB2 + 500;
+			break;
 		case 10:
-			target_height = HEIGHT_STAY;
+			target_height = HEIGHT_OB3 + 500;
 			break;
 		//Release object
 		case 3:
@@ -300,29 +326,48 @@ public:
 		case 11:
 			target_height = HEIGHT_OB3;
 			break;
-		case 12://Push capital
+		case 12://plate capital
 			target_height = HEIGHT_TOP;
 			break;
 		default:
 			break;
 		}
 
-		if(target_height == potentiometer){
-			completed = true;
-			pwm_arm = 0;
+		if(abs(target_height - potentiometer) < 15){
+			completed_arm = true;
+			pwm_arm = 50;
 		}
 		else {
-			completed = false;
-			pwm_arm += ((target_height - potentiometer) - pwm_arm) / 4;
+			completed_arm = false;
+			pwm_arm += ((target_height - potentiometer) - pwm_arm) / 5;
 		}
 
-		pwm_arm *= 1;
+		if(abs(potentiometer_old - potentiometer) < 20 && completed_arm == false){
+			if(target_height - potentiometer >= 0) pwm_arm += 10;
+			else pwm_arm -= 10;
+		}
 
-		return pwm_arm;
+		potentiometer_old = potentiometer;
+
+		return pwm_arm * 2;
+	}
+
+	int pwmPlate(int potentiometer){
+
+		if(b_mode == 12){
+			pwm_plate += ((PLATE_TOP - potentiometer) - pwm_plate) / 4;
+		}else{
+			pwm_plate += ((PLATE_BOTTOM - potentiometer) - pwm_plate) / 4;
+		}
+		return pwm_plate;
 	}
 
 	int getMode(){
 		return b_mode;
+	}
+
+	bool getComp(){
+		return completed_arm;
 	}
 
 	void Reset(){
