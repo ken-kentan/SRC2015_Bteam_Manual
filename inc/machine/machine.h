@@ -7,25 +7,26 @@
 #include "control/controlTimer.h"
 #include "utils/MadgwickAHRS.h"
 
-#include "machine/kalman.h"
 
 #ifndef M_PI
 #define M_PI       3.1415926535
 #endif
 
-#define GYRO_P     15 //base 17
-#define GYRO_D      0
+#define GYRO_P     6 //base 17
+#define GYRO_D     2
 
-#define HEIGHT_DEF  2635
+#define HEIGHT_DEF  3000
 #define HEIGHT_TOP  3667
 #define HEIGHT_STAY 2200
-#define HEIGHT_GET  1880
-#define HEIGHT_OB1  2635
-#define HEIGHT_OB2  2635
-#define HEIGHT_OB3  2635
+#define HEIGHT_GET  1890
+#define HEIGHT_OB1  2900
+#define HEIGHT_OB2  3270
+#define HEIGHT_OB3  3650
 
-#define PLATE_TOP    0
-#define PLATE_BOTTOM 0
+#define PLATE_TOP    3000
+#define PLATE_BOTTOM 1850
+
+#define PS3_A_GAIN        3
 
 void setLimit(int &value,int limit);
 
@@ -54,7 +55,7 @@ public:
 	int antiSlip(int XY_100, int mode) {
 
 		if (XY_100 == 0) {
-			anti_slip[mode] = 0;
+			anti_slip[mode] += (0 - anti_slip[mode]) / 3;
 		} else {
 			anti_slip[mode] += (XY_100 - anti_slip[mode]) / 5;
 		}
@@ -199,8 +200,8 @@ public:
 		rotation_ = rotation_P + rotation_D;
 
 		if (machine.checkMove(MODE_X) == false){
-			if      (rotation_ > 0) rotation_ += 2;
-			else if (rotation_ < 0) rotation_ -= 2;
+			if      (rotation_ > 0) rotation_ += 0;
+			else if (rotation_ < 0) rotation_ -= 0;
 		}
 
 		return rotation_;
@@ -214,14 +215,15 @@ public:
 
 class Build{
 private:
-	int b_mode            = -1,
+	int b_mode            = -2,
 		target_height     =  0,
-		potentiometer_old = 0,
-		cnt_ture_arm      = 0;
-
-	float
-		pwm_arm       =  0,
-		pwm_plate     =  0;
+		potentiometer_old =  0,
+		cnt_ture_arm      =  0,
+		cnt_ture_plate    =  0,
+		pwm_arm           =  0,
+		pwm_plate         =  0,
+		pause_time        =  0,
+		pause_time_plate  =  0;
 
 	bool completed_arm  = false,
 		 completed_plate = false;
@@ -237,53 +239,59 @@ public:
 		}
 
 		cnt_ture_arm++;
+		cnt_ture_plate++;
 
 		switch(b_mode){
+		case -1:
+			break;
 		case 0:
 		case 4:
 		case 8:
 			cnt_ture_arm = 0;
-			mainBoard.servoA.On();//Arm open.
-			mainBoard.servoB.Off();
-			mainBoard.servoC.Off();
+			mainBoard.servoA.Off();//Arm open.
+			mainBoard.servoB.On();
+			mainBoard.servoC.On();
 			break;
 		case 1:
 		case 5:
 		case 9:
 			if(completed_arm == false || cnt_ture_arm < 5) break;
 			cnt_ture_arm = 0;
-			mainBoard.servoA.On();
-			mainBoard.servoB.On();//Get objetc
-			mainBoard.servoC.Off();
+			mainBoard.servoA.Off();
+			mainBoard.servoB.Off();//Get objetc
+			mainBoard.servoC.On();
 			break;
 		case 2:
 		case 6:
 		case 10:
 			cnt_ture_arm = 0;
-			mainBoard.servoA.Off();//Arm close
-			mainBoard.servoB.On();
-			mainBoard.servoC.Off();
+			mainBoard.servoA.On();//Arm close
+			mainBoard.servoB.Off();
+			mainBoard.servoC.On();
 			break;
 		case 3:
 		case 7:
 		case 11:
 			if(completed_arm == false || cnt_ture_arm < 5) break;
 			cnt_ture_arm = 0;
-			mainBoard.servoA.Off();
-			mainBoard.servoB.Off();//Release object
-			mainBoard.servoC.Off();
+			cnt_ture_plate = 0;
+			mainBoard.servoA.On();
+			mainBoard.servoB.On();//Release object
+			mainBoard.servoC.On();
 			break;
 		case 12:
-			if(completed_plate == false) break;
-			mainBoard.servoA.On();
-			mainBoard.servoB.Off();
-			mainBoard.servoC.On();//plate capital
+			mainBoard.servoA.Off();
+			if(completed_plate == false || cnt_ture_plate < 5) break;
+			cnt_ture_plate = 0;
+			mainBoard.servoB.On();
+			mainBoard.servoC.Off();//plate capital
 			break;
 		default:
-			b_mode = -1;
-			mainBoard.servoA.Off();
-			mainBoard.servoB.Off();
-			mainBoard.servoC.Off();
+			b_mode = -2;
+			cnt_ture_arm = 0;
+			mainBoard.servoA.On();
+			mainBoard.servoB.On();
+			mainBoard.servoC.On();
 			break;
 		}
 	}
@@ -291,6 +299,9 @@ public:
 	int pwmArm(int potentiometer){
 
 		switch(b_mode){
+		case -2:
+			target_height = HEIGHT_DEF - 500;
+			break;
 		case -1:
 			target_height = HEIGHT_DEF;
 			break;
@@ -308,13 +319,13 @@ public:
 			break;
 		//Arm close
 		case 2:
-			target_height = HEIGHT_OB1 + 500;
+			target_height = HEIGHT_OB1 + 200;
 			break;
 		case 6:
-			target_height = HEIGHT_OB2 + 500;
+			target_height = HEIGHT_OB2 + 200;
 			break;
 		case 10:
-			target_height = HEIGHT_OB3 + 500;
+			target_height = HEIGHT_OB3 + 200;
 			break;
 		//Release object
 		case 3:
@@ -349,17 +360,79 @@ public:
 
 		potentiometer_old = potentiometer;
 
+		//Pass touch object
+		if(pause_time < 10 && (b_mode == 0 || b_mode == 4 || b_mode == 8 || b_mode == 12)){
+			pause_time++;
+			pwm_arm = 250;
+		}
+
 		return pwm_arm * 2;
+	}
+
+	void resetPause(){
+		pause_time = 0;
 	}
 
 	int pwmPlate(int potentiometer){
 
 		if(b_mode == 12){
+			pause_time_plate++;
 			pwm_plate += ((PLATE_TOP - potentiometer) - pwm_plate) / 4;
+			if(abs(PLATE_TOP - potentiometer) < 20) completed_plate = true;
 		}else{
+			pause_time_plate = 0;
+			completed_plate = false;
 			pwm_plate += ((PLATE_BOTTOM - potentiometer) - pwm_plate) / 4;
 		}
+
+		if(pause_time_plate < 20 && b_mode == 12) pwm_plate = 0;
+
 		return pwm_plate;
+	}
+
+	int setGain(){
+		int ps3_gain = PS3_A_GAIN;
+
+		switch(b_mode){
+		case -2:
+		case -1:
+			break;
+		//Arm open
+		case 0:
+		case 4:
+		case 8:
+			ps3_gain = 1;
+			break;
+		//Get object
+		case 1:
+		case 5:
+		case 9:
+			ps3_gain = 0;
+			break;
+		//Arm close
+		case 2:
+			break;
+		case 6:
+			ps3_gain = 2;
+			break;
+		case 10:
+			ps3_gain = 1;
+			break;
+		//Release object
+		case 3:
+			break;
+		case 7:
+			ps3_gain = 2;
+			break;
+		case 11:
+			ps3_gain = 1;
+			break;
+		case 12://plate capital
+			ps3_gain = 1;
+			break;
+		}
+
+		return ps3_gain;
 	}
 
 	int getMode(){
@@ -367,12 +440,12 @@ public:
 	}
 
 	bool getComp(){
-		return completed_arm;
+		return completed_plate;
 	}
 
 	void Reset(){
-		b_mode = -1;
-		changeMode(-1);
+		b_mode = -2;
+		changeMode(-2);
 	}
 };
 

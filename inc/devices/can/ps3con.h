@@ -77,14 +77,13 @@ public:
 		}
 	}
 
-	int convertValue(int IN_100) {
+	int convertValue(int IN_100,int gain) {
 		IN_100 = (IN_100 - 127.5) * 0.7843;
-		IN_100 *= 3;
 
-		if (IN_100 < 15 && IN_100 > -15)
+		if (abs(IN_100) < 20)
 			IN_100 = 0;
 
-		return IN_100;
+		return IN_100 * gain;
 	}
 
 	static int analog_point(int ps) {
