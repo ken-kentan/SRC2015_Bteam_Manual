@@ -12,23 +12,26 @@
 #define M_PI       3.1415926535
 #endif
 
-#define GYRO_P     6 //base 17
-#define GYRO_D     2
+#define GYRO_P         10 //base 17
+#define GYRO_D          2
 
-#define HEIGHT_DEF  3000
-#define HEIGHT_TOP  3667
-#define HEIGHT_STAY 2200
-#define HEIGHT_GET  1890
-#define HEIGHT_OB1  2900
-#define HEIGHT_OB2  3270
-#define HEIGHT_OB3  3650
+#define HEIGHT_DEF   2600
+#define HEIGHT_TOP   3667
+#define HEIGHT_STAY  2200
+#define HEIGHT_GET   1890
+#define HEIGHT_OB1   2900
+#define HEIGHT_OB2   3270
+#define HEIGHT_OB3   3650
 
-#define PLATE_TOP    3000
-#define PLATE_BOTTOM 1850
+#define PLATE_TOP    2650
+#define PLATE_BOTTOM 1550
 
-#define PS3_A_GAIN        3
+#define PS3_A_GAIN      3
+
+#define NO_CAHNGE     999
 
 void setLimit(int &value,int limit);
+void setLimitFloat(float &value,float limit);
 
 enum{
 	TURN_LEFT  = -1,
@@ -36,7 +39,9 @@ enum{
 	MODE_X     =  0,
 	MODE_Y         ,
 	X          =  0,
-	Y
+	Y              ,
+	ARM        =  0,
+	PLATE
 };
 
 class Machine {
@@ -162,7 +167,6 @@ public:
 				yaw_value += yaw_now - yaw_old;
 			}
 		}
-
 	}
 
 	int angle90(int mode){
@@ -184,6 +188,7 @@ public:
 
 		return rotation_90;
 	}
+
 	void resetAngle90(){
 		first_time = true;
 		yaw_90value = 0;
@@ -216,7 +221,6 @@ public:
 class Build{
 private:
 	int b_mode            = -2,
-		target_height     =  0,
 		potentiometer_old =  0,
 		cnt_ture_arm      =  0,
 		cnt_ture_plate    =  0,
@@ -234,7 +238,7 @@ public:
 	void changeMode(int get_mode = 99){
 		if(get_mode == 99){
 			b_mode++;
-		}else if(get_mode != 999){
+		}else if(get_mode != NO_CAHNGE){
 			b_mode = get_mode;
 		}
 
@@ -242,6 +246,7 @@ public:
 		cnt_ture_plate++;
 
 		switch(b_mode){
+		case -2:
 		case -1:
 			break;
 		case 0:
@@ -297,13 +302,14 @@ public:
 	}
 
 	int pwmArm(int potentiometer){
+		int target_height = 0;
 
 		switch(b_mode){
 		case -2:
-			target_height = HEIGHT_DEF - 500;
+			target_height = HEIGHT_DEF;
 			break;
 		case -1:
-			target_height = HEIGHT_DEF;
+			target_height = HEIGHT_DEF + 500;
 			break;
 		//Arm open
 		case 0:
@@ -362,8 +368,8 @@ public:
 
 		//Pass touch object
 		if(pause_time < 10 && (b_mode == 0 || b_mode == 4 || b_mode == 8 || b_mode == 12)){
+			pwm_arm = 250 - 5 * pause_time;
 			pause_time++;
-			pwm_arm = 250;
 		}
 
 		return pwm_arm * 2;
@@ -374,23 +380,28 @@ public:
 	}
 
 	int pwmPlate(int potentiometer){
+		int target = 0;
 
 		if(b_mode == 12){
 			pause_time_plate++;
-			pwm_plate += ((PLATE_TOP - potentiometer) - pwm_plate) / 4;
+			target = PLATE_TOP;
 			if(abs(PLATE_TOP - potentiometer) < 20) completed_plate = true;
 		}else{
 			pause_time_plate = 0;
+			target = PLATE_BOTTOM;
 			completed_plate = false;
-			pwm_plate += ((PLATE_BOTTOM - potentiometer) - pwm_plate) / 4;
 		}
 
-		if(pause_time_plate < 20 && b_mode == 12) pwm_plate = 0;
+		pwm_plate += ((target - potentiometer) - pwm_plate) / 5;
+
+		if((pause_time_plate < 20 && b_mode == 12)) pwm_plate = 0;
+
+		if(abs(target - potentiometer) < 400) setLimit(pwm_plate,abs(target - potentiometer) / 2 + 50);
 
 		return pwm_plate;
 	}
 
-	int setGain(){
+	int getGain(){
 		int ps3_gain = PS3_A_GAIN;
 
 		switch(b_mode){
@@ -439,8 +450,9 @@ public:
 		return b_mode;
 	}
 
-	bool getComp(){
-		return completed_plate;
+	bool getComp(int mode){
+		if(mode == PLATE) return completed_plate;
+		else return completed_arm;
 	}
 
 	void Reset(){
@@ -505,5 +517,9 @@ private:
 };
 
 void setLimit(int &value,int limit){
+	value = min(max(value, - limit), limit);
+}
+
+void setLimitFloat(float &value,float limit){
 	value = min(max(value, - limit), limit);
 }

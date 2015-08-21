@@ -81,13 +81,14 @@ int main(void) {
 		int rotation_gyro = 0,
 			rotation      = 0,
 			rotation_90   = 0,
-			A_out         = 0,
-			B_out         = 0,
-			C_out         = 0,
 			D_out         = 0,
 			SPI_out       = 0,
 			X_100         = 0,
 			Y_100         = 0;
+
+		float A_out       = 0,
+			  B_out       = 0,
+			  C_out       = 0;
 
 		mainBoard.can.Update();
 		mainBoard.buzzer.stop();
@@ -105,8 +106,7 @@ int main(void) {
 
 			mainBoard.led.Flash();
 
-			//build.changeMode(12);
-			D_out = build.pwmArm((int)mainBoard.ad[2]->get());
+			D_out   = build.pwmArm((int)mainBoard.ad[2]->get());
 			SPI_out = build.pwmPlate((int)mainBoard.ad[3]->get());
 			setLimit(D_out,PWM_LIMIT);
 			setLimit(SPI_out,200);
@@ -114,6 +114,14 @@ int main(void) {
 			mainBoard.motorD.setOutput((float) SPI_out / 500.0);
 
 			MillisecondTimer::delay(50);
+			continue;
+		}else if(Start == true && ps3con->getButtonPress(START)){//Emergency stop
+			mainBoard.buzzer.set(-1, 4);
+			debug << "[WARN]Emergency stop!!\r\n";
+			Start = false;
+			build.Reset();
+
+			MillisecondTimer::delay(200);
 			continue;
 		}
 
@@ -149,20 +157,20 @@ int main(void) {
 
 		//Build capital (push_time)
 		if(ps3con->getButtonPress(CIRCLE) && push_time == 0){
-			mainBoard.buzzer.set(-1, 6);
-			build.changeMode();
+			mainBoard.buzzer.set(-1, 5);
 			push_time = 1;
+			build.changeMode();
 			build.resetPause();
 		}
-		build.changeMode(999);
+		build.changeMode(NO_CAHNGE);
 
 		if(push_time != 0){
 			push_time++;
-			if(push_time >10)push_time = 0;
+			if(push_time > 10) push_time = 0;
 		}
 
-		X_100 = ps3con->convertValue(ps3con->getAnalog(ANALOG_L_X),build.setGain());
-		Y_100 = ps3con->convertValue(ps3con->getAnalog(ANALOG_L_Y),build.setGain());
+		X_100 = ps3con->convertValue(ps3con->getAnalog(ANALOG_L_X),build.getGain());
+		Y_100 = ps3con->convertValue(ps3con->getAnalog(ANALOG_L_Y),build.getGain());
 
 		if (ps3con->getButtonPress(RIGHT)) X_100 =  SPEED_Linearly;
 		if (ps3con->getButtonPress(LEFT))  X_100 = -SPEED_Linearly;
@@ -193,35 +201,38 @@ int main(void) {
 		Y_100 = machine.antiSlip(Y_100, MODE_Y);
 
 		//motor
-		A_out =  X_100 / 2 - Y_100 * sqrt(3) / 2 + rotation + rotation_gyro + rotation_90;// + rotation_gyro + rotation_90
+		A_out =  X_100 / 2 - Y_100 * sqrt(3) / 2 + rotation + rotation_gyro + rotation_90;
 		B_out =  X_100 / 2 + Y_100 * sqrt(3) / 2 + rotation + rotation_gyro + rotation_90;
 		C_out = -X_100                           + rotation + rotation_gyro + rotation_90;
 
-		//SPI_out = -ps3con->convertValue(ps3con->getAnalog(ANALOG_R_Y)) * 2;
+		//SPI_out = -ps3con->convertValue(ps3con->getAnalog(ANALOG_R_Y),3) * 2;
 		D_out   = build.pwmArm((int)mainBoard.ad[2]->get());
 		SPI_out = build.pwmPlate((int)mainBoard.ad[3]->get());
 
-		setLimit(A_out,PWM_LIMIT);
-		setLimit(B_out,PWM_LIMIT);
-		setLimit(C_out,PWM_LIMIT);
+		setLimitFloat(A_out,PWM_LIMIT);
+		setLimitFloat(B_out,PWM_LIMIT);
+		setLimitFloat(C_out,PWM_LIMIT);
 		setLimit(D_out,PWM_LIMIT);
 		setLimit(SPI_out,200);
 
 		//PWM output
-		mainBoard.motorA.setOutput((float) A_out / 500.0);
-		mainBoard.motorB.setOutput((float) B_out / 500.0);
-		mainBoard.motorC.setOutput((float) C_out / 500.0);
-		mainBoard.motorD.setOutput((float) D_out / 500.0);
+		mainBoard.motorA.setOutput(A_out / 500.0);
+		mainBoard.motorB.setOutput(B_out / 500.0);
+		mainBoard.motorC.setOutput(C_out / 500.0);
+		mainBoard.motorD.setOutput((float)D_out / 500.0);
 		spimotor.setOutput((float)SPI_out/500.0);
 
-		yaw_old = yaw_now;
+		yaw_old    = yaw_now;
 		enc_old[X] = enc_now[X];
 		enc_old[Y] = enc_now[Y];
 
 		//debug
 		char str[128];
-		//sprintf(str, "[DEBUG]PS3con:%d,%d omniPWM:%d,%d,%d Gyro:%d Rotate:%d Rotate90:%d\r\n",X_100,Y_100,A_out,B_out,C_out,rotation_gyro,rotation,rotation_90);
-		sprintf(str,"[TEST]%d %d %d %s\r\n",(int)mainBoard.ad[3]->get(),SPI_out,build.getMode(),build.getComp()?"true":"false");
+		sprintf(str, "[DEBUG]Mode:%d Arm,Plate:%s,%s PS3con:%d,%d omniPWM:%.0f,%.0f,%.0f Gyro:%d Rotate:%d Rotate90:%d\r\n"
+				,build.getMode(),build.getComp(ARM)?"true":"false",build.getComp(PLATE)?"true":"false"
+						,X_100,Y_100,A_out,B_out,C_out,rotation_gyro,rotation,rotation_90);
+		//sprintf(str,"[TEST]%d %d %d %s\r\n",(int)mainBoard.ad[3]->get());
+		//sprintf(str,"[TEST]checkMove X:%s Y:%s\r\n",machine.checkMove(X)?"true":"false",machine.checkMove(Y)?"true":"false");
 		debug << str;
 
 		MillisecondTimer::delay(50);
