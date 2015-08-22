@@ -130,8 +130,8 @@ int main(void) {
 		enc_now[X] = mainBoard.encoders.getCounter1();
 		enc_now[Y] = mainBoard.encoders.getCounter2();
 
-		machine.extendEncValue(enc_now[X],enc_old[X],MODE_X);
-		machine.extendEncValue(enc_now[Y],enc_old[Y],MODE_Y);
+		machine.extendEncValue(enc_now[X],enc_old[X],X);
+		machine.extendEncValue(enc_now[Y],enc_old[Y],Y);
 
 		//Set TargetLocation
 		if (ps3con->getButtonPress(TRIANGLE)) machine.setTargetLocation();
@@ -179,26 +179,26 @@ int main(void) {
 
 		//Automatically adjust the distance between the object
 		if (ps3con->getButtonPress(SQUARE) && ps3con->getButtonPress(UP)) {
-			Y_100 =  machine.adjustDistance((int)mainBoard.ad[0]->get(),OBJECT_DISTANCE,MODE_Y);
+			Y_100 =  machine.adjustDistance((int)mainBoard.ad[0]->get(),OBJECT_DISTANCE,Y);
 			if(Y_100 == 0) mainBoard.buzzer.set(-1, 6);
 		}
 
 		//Automatically adjust the distance between the wall
 		if (ps3con->getButtonPress(SQUARE) && ps3con->getButtonPress(LEFT)) {
-			X_100 =  machine.adjustDistance((int)mainBoard.ad[1]->get(),WALL_DISTANCE,MODE_X);
+			X_100 =  machine.adjustDistance((int)mainBoard.ad[1]->get(),WALL_DISTANCE,X);
 			if(X_100 == 0) mainBoard.buzzer.set(-1, 6);
 		}
 
 		//Automatically run to target
 		if (ps3con->getButtonPress(CROSS)) {
-			X_100 = machine.runToTarget(MODE_X);
-			Y_100 = machine.runToTarget(MODE_Y);
+			X_100 = machine.runToTarget(X);
+			Y_100 = machine.runToTarget(Y);
 
 			if(X_100 == 0 && Y_100 == 0) mainBoard.buzzer.set(-1, 6);
 		}
 
-		X_100 = machine.antiSlip(X_100, MODE_X,build.getMode());
-		Y_100 = machine.antiSlip(Y_100, MODE_Y,build.getMode());
+		X_100 = machine.antiSlip(X_100, X,build.getMode());
+		Y_100 = machine.antiSlip(Y_100, Y,build.getMode());
 
 		//motor
 		A_out =  X_100 / 2 - Y_100 * sqrt(3) / 2 + rotation + rotation_gyro + rotation_90;

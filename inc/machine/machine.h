@@ -33,11 +33,10 @@
 void setLimit(int &value,int limit);
 void setLimitFloat(float &value,float limit);
 
+
 enum{
 	TURN_LEFT  = -1,
 	TURN_RIGHT =  1,
-	MODE_X     =  0,
-	MODE_Y         ,
 	X          =  0,
 	Y              ,
 	ARM        =  0,
@@ -49,12 +48,17 @@ class Machine{
 private:
 	int anti_slip[2]  = {},
 	    auto_runXY[2] = {},
-		enc[2]        = {},
-		enc_now[2]    = {},
-		enc_old[2]    = {},
-		enc_diff[2]   = {},
 		target_loc[2] = {},
 		XY_100        = 0;
+
+	struct Encoder{
+		int value[2] = {},
+			now[2]   = {},
+			old[2]   = {},
+			diff[2]  = {};
+	};
+
+	Encoder enc;
 
 public:
 	int antiSlip(int XY_100,int mode,int get_b_mode) {
@@ -86,7 +90,7 @@ public:
 	int runToTarget(int mode) {
 		int target_distance = 0;
 
-		target_distance = enc[mode] - target_loc[mode];
+		target_distance = enc.value[mode] - target_loc[mode];
 
 		if (abs(target_distance) >= 10) {
 			if (checkMove(mode) == false) {
@@ -104,14 +108,14 @@ public:
 	}
 
 	void setTargetLocation(){
-		target_loc[X] = enc[X];
-		target_loc[Y] = enc[Y];
+		target_loc[X] = enc.value[X];
+		target_loc[Y] = enc.value[Y];
 	}
 
 	//Automatically adjust the distance between the object
 	int adjustDistance(int distance,int target,int mode){
 
-		if (distance > target + 25 || distance < target - 25) {
+		if (abs(distance - target) > 25) {
 			XY_100 = (distance - target) / 3;
 
 			if(checkMove(mode) == false){
@@ -136,17 +140,17 @@ public:
 			_enc = now_value;
 		}
 
-		enc_now[mode] = now_value;
-		enc_old[mode] = old_value;
-		enc_diff[mode] = _enc;
+		enc.now[mode] = now_value;
+		enc.old[mode] = old_value;
+		enc.diff[mode] = _enc;
 
-		enc[mode] += _enc;
+		enc.value[mode] += _enc;
 	}
 
 	bool checkMove(int mode){
 		bool check = false;
 
-		if(abs(enc_diff[mode]) > 10) check = true;
+		if(abs(enc.diff[mode]) > 10) check = true;
 
 		return check;
 	}
@@ -157,28 +161,32 @@ class Gyro : public Machine{
 private:
 	int   count_180     = 0;
 
-	float yaw_90value   = 0,
-		  yaw_90old     = 0,
-		  yaw_value     = 0,
-		  yaw_value_old = 0,
-		  yaw_reset     = 0;
-
 	bool first_time = true;
+
+	struct Yaw{
+		float value     = 0,
+			  old       = 0,
+			  offset    = 0,
+			  value_90d = 0,
+			  old_90d   = 0;
+	};
+
+	Yaw yaw;
 
 public:
 	void set(float yaw_now,float yaw_old){
 
 		if (yaw_now - yaw_old > 0.04 || yaw_now - yaw_old < -0.04){
-			yaw_value_old = yaw_value;
+			yaw.old = yaw.value;
 
 			if(abs(yaw_now + yaw_old) < 20 && (yaw_now < -150 || yaw_now > 150)){
 
 				if(yaw_old > 150)       count_180++;
 				else if(yaw_old < -150) count_180--;
 
-				yaw_value += 180 * count_180 + yaw_now + (180 * count_180 - yaw_value);
+				yaw.value += 180 * count_180 + yaw_now + (180 * count_180 - yaw.value);
 			}else{
-				yaw_value += yaw_now - yaw_old;
+				yaw.value += yaw_now - yaw_old;
 			}
 		}
 	}
@@ -187,16 +195,16 @@ public:
 		int rotation_90 = 0;
 
 		if(first_time == true){
-			yaw_90old = yaw_value;
+			yaw.old_90d = yaw.value;
 			first_time = false;
 		}
 
-		if(abs(yaw_value - yaw_90old) < 20) yaw_90value += abs(yaw_value - yaw_90old);
+		if(abs(yaw.value - yaw.old_90d) < 20) yaw.value_90d += abs(yaw.value - yaw.old_90d);
 
-		if(yaw_90value < 90) rotation_90 = 120 - yaw_90value;
+		if(yaw.value_90d < 90) rotation_90 = 120 - yaw.value_90d;
 		else                 rotation_90 = 0;
 
-		yaw_90old = yaw_value;
+		yaw.old_90d = yaw.value;
 
 		if(mode == TURN_LEFT) rotation_90 *= -1;
 
@@ -205,7 +213,7 @@ public:
 
 	void resetAngle90(){
 		first_time = true;
-		yaw_90value = 0;
+		yaw.value_90d = 0;
 	}
 
 	int correct(){
@@ -213,12 +221,12 @@ public:
 			rotation_P = 0,
 			rotation_D = 0;
 
-		rotation_P = (yaw_value - yaw_reset) * GYRO_P;
-		rotation_D = (yaw_value - yaw_value_old) * GYRO_D;
+		rotation_P = (yaw.value - yaw.offset) * GYRO_P;
+		rotation_D = (yaw.value - yaw.old) * GYRO_D;
 
 		rotation_ = rotation_P + rotation_D;
 
-		if (checkMove(MODE_X) == false){
+		if (checkMove(X) == false){
 			if      (rotation_ > 0) rotation_ += 0;
 			else if (rotation_ < 0) rotation_ -= 0;
 		}
@@ -227,7 +235,7 @@ public:
 	}
 
 	void reset(int &rotation){
-		yaw_reset = yaw_value;
+		yaw.offset = yaw.value;
 		rotation = 0;
 	}
 };
@@ -244,7 +252,7 @@ private:
 		pause_time_plate  =  0;
 
 	bool completed_arm   = false,
-		completed_plate = false;
+		 completed_plate = false;
 
 	MainV3 *mainBoard;
 
