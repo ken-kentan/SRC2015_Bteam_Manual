@@ -271,17 +271,9 @@ public:
 	}
 
 	//only yaw , customed by kentaro doi
-	float getYaw(float &yaw) {
+	void getYaw(float &yaw) {
 		//yaw = atan2(2.0*(q1*q2 + q3*q0), q3*q3 - q0*q0 - q1*q1 + q2*q2);
 		yaw = atan2(2.0f * (q1 * q2 + q0 * q3),
 				q0 * q0 + q1 * q1 - q2 * q2 - q3 * q3);
 	}
-
-	void resetYaw() {
-		q0 = 1.0f;
-		q1 = 0.0f;
-		q2 = 0.0f;
-		q3 = 0.0f;
-	}
-
 };

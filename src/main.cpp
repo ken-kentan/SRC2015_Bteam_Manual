@@ -72,7 +72,7 @@ int main(void) {
 
 	Machine machine;
 	Gyro gyro;
-	Build build;
+	Build build(&mainBoard);
 
 	//Reset
 	build.Reset();
@@ -197,8 +197,8 @@ int main(void) {
 			if(X_100 == 0 && Y_100 == 0) mainBoard.buzzer.set(-1, 6);
 		}
 
-		X_100 = machine.antiSlip(X_100, MODE_X);
-		Y_100 = machine.antiSlip(Y_100, MODE_Y);
+		X_100 = machine.antiSlip(X_100, MODE_X,build.getMode());
+		Y_100 = machine.antiSlip(Y_100, MODE_Y,build.getMode());
 
 		//motor
 		A_out =  X_100 / 2 - Y_100 * sqrt(3) / 2 + rotation + rotation_gyro + rotation_90;
@@ -229,7 +229,7 @@ int main(void) {
 		//debug
 		char str[128];
 		sprintf(str, "[DEBUG]Mode:%d Arm,Plate:%s,%s PS3con:%d,%d omniPWM:%.0f,%.0f,%.0f Gyro:%d Rotate:%d Rotate90:%d\r\n"
-				,build.getMode(),build.getComp(ARM)?"true":"false",build.getComp(PLATE)?"true":"false"
+				,build.getMode(),build.getComp(ARM)?"O":"X",build.getComp(PLATE)?"O":"X"
 						,X_100,Y_100,A_out,B_out,C_out,rotation_gyro,rotation,rotation_90);
 		//sprintf(str,"[TEST]%d %d %d %s\r\n",(int)mainBoard.ad[3]->get());
 		//sprintf(str,"[TEST]checkMove X:%s Y:%s\r\n",machine.checkMove(X)?"true":"false",machine.checkMove(Y)?"true":"false");

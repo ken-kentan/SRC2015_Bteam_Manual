@@ -44,7 +44,8 @@ enum{
 	PLATE
 };
 
-class Machine {
+class Machine{
+
 private:
 	int anti_slip[2]  = {},
 	    auto_runXY[2] = {},
@@ -57,13 +58,31 @@ private:
 
 public:
 
-	int antiSlip(int XY_100, int mode) {
+	int antiSlip(int XY_100,int mode,int get_b_mode) {
+		int acc_rate = 5;
 
 		if (XY_100 == 0) {
-			anti_slip[mode] += (0 - anti_slip[mode]) / 3;
+			acc_rate = 3;
 		} else {
-			anti_slip[mode] += (XY_100 - anti_slip[mode]) / 5;
+			acc_rate = 5;
 		}
+
+		switch(get_b_mode){
+		case 0:
+		case 4:
+		case 8:
+		case 10:
+		case 11:
+		case 12:
+			acc_rate = 1;
+			break;
+		case 6:
+		case 7:
+			acc_rate = 2;
+			break;
+		}
+
+		anti_slip[mode] += (XY_100 - anti_slip[mode]) / acc_rate;
 
 		return anti_slip[mode];
 	}
@@ -138,7 +157,7 @@ public:
 
 };
 
-class Gyro{
+class Gyro : public Machine{
 private:
 	int   count_180     = 0;
 	float yaw_90value   = 0,
@@ -148,8 +167,6 @@ private:
 		  yaw_reset     = 0;
 
 	bool first_time = true;
-
-	Machine machine;
 
 public:
 	void set(float yaw_now,float yaw_old){
@@ -204,7 +221,7 @@ public:
 
 		rotation_ = rotation_P + rotation_D;
 
-		if (machine.checkMove(MODE_X) == false){
+		if (checkMove(MODE_X) == false){
 			if      (rotation_ > 0) rotation_ += 0;
 			else if (rotation_ < 0) rotation_ -= 0;
 		}
@@ -220,7 +237,25 @@ public:
 
 class Build{
 private:
-	int b_mode            = -2,
+	int b_mode ,
+	    potentiometer_old ,
+		cnt_ture_arm ,
+		cnt_ture_plate ,
+		pwm_arm ,
+		pwm_plate ,
+		pause_time ,
+		pause_time_plate ;
+
+	bool completed_arm ,
+		 completed_plate ;
+
+	MainV3 *mainBoard;
+
+public:
+	Build(MainV3 *mainv3){
+		mainBoard = mainv3;
+
+		b_mode            = -2,
 		potentiometer_old =  0,
 		cnt_ture_arm      =  0,
 		cnt_ture_plate    =  0,
@@ -229,12 +264,10 @@ private:
 		pause_time        =  0,
 		pause_time_plate  =  0;
 
-	bool completed_arm  = false,
-		 completed_plate = false;
+		completed_arm   = false,
+		completed_plate = false;
+	}
 
-	MainV3 mainBoard;
-
-public:
 	void changeMode(int get_mode = 99){
 		if(get_mode == 99){
 			b_mode++;
@@ -253,26 +286,26 @@ public:
 		case 4:
 		case 8:
 			cnt_ture_arm = 0;
-			mainBoard.servoA.Off();//Arm open.
-			mainBoard.servoB.On();
-			mainBoard.servoC.On();
+			mainBoard->servoA.Off();//Arm open.
+			mainBoard->servoB.On();
+			mainBoard->servoC.On();
 			break;
 		case 1:
 		case 5:
 		case 9:
 			if(completed_arm == false || cnt_ture_arm < 5) break;
 			cnt_ture_arm = 0;
-			mainBoard.servoA.Off();
-			mainBoard.servoB.Off();//Get objetc
-			mainBoard.servoC.On();
+			mainBoard->servoA.Off();
+			mainBoard->servoB.Off();//Get objetc
+			mainBoard->servoC.On();
 			break;
 		case 2:
 		case 6:
 		case 10:
 			cnt_ture_arm = 0;
-			mainBoard.servoA.On();//Arm close
-			mainBoard.servoB.Off();
-			mainBoard.servoC.On();
+			mainBoard->servoA.On();//Arm close
+			mainBoard->servoB.Off();
+			mainBoard->servoC.On();
 			break;
 		case 3:
 		case 7:
@@ -280,23 +313,23 @@ public:
 			if(completed_arm == false || cnt_ture_arm < 5) break;
 			cnt_ture_arm = 0;
 			cnt_ture_plate = 0;
-			mainBoard.servoA.On();
-			mainBoard.servoB.On();//Release object
-			mainBoard.servoC.On();
+			mainBoard->servoA.On();
+			mainBoard->servoB.On();//Release object
+			mainBoard->servoC.On();
 			break;
 		case 12:
-			mainBoard.servoA.Off();
+			mainBoard->servoA.Off();
 			if(completed_plate == false || cnt_ture_plate < 5) break;
 			cnt_ture_plate = 0;
-			mainBoard.servoB.On();
-			mainBoard.servoC.Off();//plate capital
+			mainBoard->servoB.On();
+			mainBoard->servoC.Off();//plate capital
 			break;
 		default:
 			b_mode = -2;
 			cnt_ture_arm = 0;
-			mainBoard.servoA.On();
-			mainBoard.servoB.On();
-			mainBoard.servoC.On();
+			mainBoard->servoA.On();
+			mainBoard->servoB.On();
+			mainBoard->servoC.On();
 			break;
 		}
 	}
@@ -394,7 +427,7 @@ public:
 
 		pwm_plate += ((target - potentiometer) - pwm_plate) / 5;
 
-		if((pause_time_plate < 20 && b_mode == 12)) pwm_plate = 0;
+		if(pause_time_plate < 20) pwm_plate = 0;
 
 		if(abs(target - potentiometer) < 400) setLimit(pwm_plate,abs(target - potentiometer) / 2 + 50);
 
