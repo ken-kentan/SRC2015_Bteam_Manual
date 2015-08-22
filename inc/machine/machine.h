@@ -57,15 +57,11 @@ private:
 		XY_100        = 0;
 
 public:
-
 	int antiSlip(int XY_100,int mode,int get_b_mode) {
 		int acc_rate = 5;
 
-		if (XY_100 == 0) {
-			acc_rate = 3;
-		} else {
-			acc_rate = 5;
-		}
+		if (XY_100 == 0) acc_rate = 3;
+		else             acc_rate = 5;
 
 		switch(get_b_mode){
 		case 0:
@@ -92,7 +88,7 @@ public:
 
 		target_distance = enc[mode] - target_loc[mode];
 
-		if (target_distance >= 10 || target_distance <= -10) {
+		if (abs(target_distance) >= 10) {
 			if (checkMove(mode) == false) {
 				if      (auto_runXY[mode] < 0) auto_runXY[mode] -= 35;
 				else if (auto_runXY[mode] > 0) auto_runXY[mode] += 35;
@@ -160,6 +156,7 @@ public:
 class Gyro : public Machine{
 private:
 	int   count_180     = 0;
+
 	float yaw_90value   = 0,
 		  yaw_90old     = 0,
 		  yaw_value     = 0,
@@ -235,27 +232,9 @@ public:
 	}
 };
 
-class Build{
+class Builder{
 private:
-	int b_mode ,
-	    potentiometer_old ,
-		cnt_ture_arm ,
-		cnt_ture_plate ,
-		pwm_arm ,
-		pwm_plate ,
-		pause_time ,
-		pause_time_plate ;
-
-	bool completed_arm ,
-		 completed_plate ;
-
-	MainV3 *mainBoard;
-
-public:
-	Build(MainV3 *mainv3){
-		mainBoard = mainv3;
-
-		b_mode            = -2,
+	int b_mode            = -2,
 		potentiometer_old =  0,
 		cnt_ture_arm      =  0,
 		cnt_ture_plate    =  0,
@@ -264,8 +243,14 @@ public:
 		pause_time        =  0,
 		pause_time_plate  =  0;
 
-		completed_arm   = false,
+	bool completed_arm   = false,
 		completed_plate = false;
+
+	MainV3 *mainBoard;
+
+public:
+	Builder(MainV3 *mainv3){
+		mainBoard = mainv3;
 	}
 
 	void changeMode(int get_mode = 99){

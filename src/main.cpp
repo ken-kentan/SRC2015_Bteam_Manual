@@ -72,7 +72,7 @@ int main(void) {
 
 	Machine machine;
 	Gyro gyro;
-	Build build(&mainBoard);
+	Builder build(&mainBoard);
 
 	//Reset
 	build.Reset();
