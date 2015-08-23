@@ -23,8 +23,8 @@
 #define HEIGHT_OB2   3270
 #define HEIGHT_OB3   3650
 
-#define PLATE_TOP    2650
-#define PLATE_BOTTOM 1550
+#define PLATE_TOP    1900
+#define PLATE_BOTTOM 800
 
 #define PS3_A_GAIN      3
 
@@ -43,13 +43,14 @@ enum{
 	PLATE
 };
 
-class Machine{
+class Machine {
 
 private:
 	int anti_slip[2]  = {},
 	    auto_runXY[2] = {},
 		target_loc[2] = {},
-		XY_100        = 0;
+		XY_100        = 0,
+		builder_mode  = -2;
 
 	struct Encoder{
 		int value[2] = {},
@@ -61,13 +62,13 @@ private:
 	Encoder enc;
 
 public:
-	int antiSlip(int XY_100,int mode,int get_b_mode) {
+	int antiSlip(int XY_100,int mode) {
 		int acc_rate = 5;
 
 		if (XY_100 == 0) acc_rate = 3;
 		else             acc_rate = 5;
 
-		switch(get_b_mode){
+		switch(builder_mode){
 		case 0:
 		case 4:
 		case 8:
@@ -155,336 +156,342 @@ public:
 		return check;
 	}
 
-};
+	class Gyro {
+	private:
+		int   count_180     = 0;
 
-class Gyro : public Machine{
-private:
-	int   count_180     = 0;
+		bool first_time = true;
 
-	bool first_time = true;
+		struct Yaw{
+			float value     = 0,
+				  old       = 0,
+				  offset    = 0,
+				  value_90d = 0,
+				  old_90d   = 0;
+		};
 
-	struct Yaw{
-		float value     = 0,
-			  old       = 0,
-			  offset    = 0,
-			  value_90d = 0,
-			  old_90d   = 0;
-	};
+		Yaw yaw;
+		Machine *machine;
 
-	Yaw yaw;
+	public:
+		Gyro(Machine *_machine){
+			machine = _machine;
+		}
 
-public:
-	void set(float yaw_now,float yaw_old){
+		void set(float yaw_now,float yaw_old){
 
-		if (yaw_now - yaw_old > 0.04 || yaw_now - yaw_old < -0.04){
-			yaw.old = yaw.value;
+			if (yaw_now - yaw_old > 0.04 || yaw_now - yaw_old < -0.04){
+				yaw.old = yaw.value;
 
-			if(abs(yaw_now + yaw_old) < 20 && (yaw_now < -150 || yaw_now > 150)){
+				if(abs(yaw_now + yaw_old) < 20 && (yaw_now < -150 || yaw_now > 150)){
 
-				if(yaw_old > 150)       count_180++;
-				else if(yaw_old < -150) count_180--;
+					if(yaw_old > 150)       count_180++;
+					else if(yaw_old < -150) count_180--;
 
-				yaw.value += 180 * count_180 + yaw_now + (180 * count_180 - yaw.value);
-			}else{
-				yaw.value += yaw_now - yaw_old;
+					yaw.value += 180 * count_180 + yaw_now + (180 * count_180 - yaw.value);
+				}else{
+					yaw.value += yaw_now - yaw_old;
+				}
 			}
 		}
-	}
 
-	int angle90(int mode){
-		int rotation_90 = 0;
+		int angle90(int mode){
+			int rotation_90 = 0;
 
-		if(first_time == true){
+			if(first_time == true){
+				yaw.old_90d = yaw.value;
+				first_time = false;
+			}
+
+			if(abs(yaw.value - yaw.old_90d) < 20) yaw.value_90d += abs(yaw.value - yaw.old_90d);
+
+			if(yaw.value_90d < 90) rotation_90 = 120 - yaw.value_90d;
+			else                 rotation_90 = 0;
+
 			yaw.old_90d = yaw.value;
-			first_time = false;
+
+			if(mode == TURN_LEFT) rotation_90 *= -1;
+
+			return rotation_90;
 		}
 
-		if(abs(yaw.value - yaw.old_90d) < 20) yaw.value_90d += abs(yaw.value - yaw.old_90d);
-
-		if(yaw.value_90d < 90) rotation_90 = 120 - yaw.value_90d;
-		else                 rotation_90 = 0;
-
-		yaw.old_90d = yaw.value;
-
-		if(mode == TURN_LEFT) rotation_90 *= -1;
-
-		return rotation_90;
-	}
-
-	void resetAngle90(){
-		first_time = true;
-		yaw.value_90d = 0;
-	}
-
-	int correct(){
-		int rotation_  = 0,
-			rotation_P = 0,
-			rotation_D = 0;
-
-		rotation_P = (yaw.value - yaw.offset) * GYRO_P;
-		rotation_D = (yaw.value - yaw.old) * GYRO_D;
-
-		rotation_ = rotation_P + rotation_D;
-
-		if (checkMove(X) == false){
-			if      (rotation_ > 0) rotation_ += 0;
-			else if (rotation_ < 0) rotation_ -= 0;
+		void resetAngle90(){
+			first_time = true;
+			yaw.value_90d = 0;
 		}
 
-		return rotation_;
-	}
+		int correct(){
+			int rotation_  = 0,
+				rotation_P = 0,
+				rotation_D = 0;
 
-	void reset(int &rotation){
-		yaw.offset = yaw.value;
-		rotation = 0;
-	}
-};
+			rotation_P = (yaw.value - yaw.offset) * GYRO_P;
+			rotation_D = (yaw.value - yaw.old) * GYRO_D;
 
-class Builder{
-private:
-	int b_mode            = -2,
-		potentiometer_old =  0,
-		cnt_ture_arm      =  0,
-		cnt_ture_plate    =  0,
-		pwm_arm           =  0,
-		pwm_plate         =  0,
-		pause_time        =  0,
-		pause_time_plate  =  0;
+			rotation_ = rotation_P + rotation_D;
 
-	bool completed_arm   = false,
-		 completed_plate = false;
+			if (machine->checkMove(X) == false){
+				if      (rotation_ > 0) rotation_ += 0;
+				else if (rotation_ < 0) rotation_ -= 0;
+			}
 
-	MainV3 *mainBoard;
-
-public:
-	Builder(MainV3 *mainv3){
-		mainBoard = mainv3;
-	}
-
-	void changeMode(int get_mode = 99){
-		if(get_mode == 99){
-			b_mode++;
-		}else if(get_mode != NO_CAHNGE){
-			b_mode = get_mode;
+			return rotation_;
 		}
 
-		cnt_ture_arm++;
-		cnt_ture_plate++;
-
-		switch(b_mode){
-		case -2:
-		case -1:
-			break;
-		case 0:
-		case 4:
-		case 8:
-			cnt_ture_arm = 0;
-			mainBoard->servoA.Off();//Arm open.
-			mainBoard->servoB.On();
-			mainBoard->servoC.On();
-			break;
-		case 1:
-		case 5:
-		case 9:
-			if(completed_arm == false || cnt_ture_arm < 5) break;
-			cnt_ture_arm = 0;
-			mainBoard->servoA.Off();
-			mainBoard->servoB.Off();//Get objetc
-			mainBoard->servoC.On();
-			break;
-		case 2:
-		case 6:
-		case 10:
-			cnt_ture_arm = 0;
-			mainBoard->servoA.On();//Arm close
-			mainBoard->servoB.Off();
-			mainBoard->servoC.On();
-			break;
-		case 3:
-		case 7:
-		case 11:
-			if(completed_arm == false || cnt_ture_arm < 5) break;
-			cnt_ture_arm = 0;
-			cnt_ture_plate = 0;
-			mainBoard->servoA.On();
-			mainBoard->servoB.On();//Release object
-			mainBoard->servoC.On();
-			break;
-		case 12:
-			mainBoard->servoA.Off();
-			if(completed_plate == false || cnt_ture_plate < 5) break;
-			cnt_ture_plate = 0;
-			mainBoard->servoB.On();
-			mainBoard->servoC.Off();//plate capital
-			break;
-		default:
-			b_mode = -2;
-			cnt_ture_arm = 0;
-			mainBoard->servoA.On();
-			mainBoard->servoB.On();
-			mainBoard->servoC.On();
-			break;
+		void reset(int &rotation){
+			yaw.offset = yaw.value;
+			rotation = 0;
 		}
-	}
+	};
 
-	int pwmArm(int potentiometer){
-		int target_height = 0;
+	class Builder{
+	private:
+		int potentiometer_old =  0,
+			cnt_ture_arm      =  0,
+			cnt_ture_plate    =  0,
+			pwm_arm           =  0,
+			pwm_plate         =  0,
+			pause_time        =  0,
+			pause_time_plate  =  0;
 
-		switch(b_mode){
-		case -2:
-			target_height = HEIGHT_DEF;
-			break;
-		case -1:
-			target_height = HEIGHT_DEF + 500;
-			break;
-		//Arm open
-		case 0:
-		case 4:
-		case 8:
-			target_height = HEIGHT_STAY;
-			break;
-		//Get object
-		case 1:
-		case 5:
-		case 9:
-			target_height = HEIGHT_GET;
-			break;
-		//Arm close
-		case 2:
-			target_height = HEIGHT_OB1 + 200;
-			break;
-		case 6:
-			target_height = HEIGHT_OB2 + 200;
-			break;
-		case 10:
-			target_height = HEIGHT_OB3 + 200;
-			break;
-		//Release object
-		case 3:
-			target_height = HEIGHT_OB1;
-			break;
-		case 7:
-			target_height = HEIGHT_OB2;
-			break;
-		case 11:
-			target_height = HEIGHT_OB3;
-			break;
-		case 12://plate capital
-			target_height = HEIGHT_TOP;
-			break;
-		default:
-			break;
+		bool completed_arm   = false,
+			 completed_plate = false;
+
+		MainV3 *mainBoard;
+		Machine *machine;
+
+
+	public:
+		Builder(MainV3 *mainv3,Machine *_machine){
+			mainBoard = mainv3;
+			machine = _machine;
 		}
 
-		if(abs(target_height - potentiometer) < 15){
-			completed_arm = true;
-			pwm_arm = 50;
-		}
-		else {
-			completed_arm = false;
-			pwm_arm += ((target_height - potentiometer) - pwm_arm) / 5;
-		}
+		void changeMode(int get_mode = 99){
+			if(get_mode == 99){
+				machine->builder_mode++;
+			}else if(get_mode != NO_CAHNGE){
+				machine->builder_mode = get_mode;
+			}
 
-		if(abs(potentiometer_old - potentiometer) < 20 && completed_arm == false){
-			if(target_height - potentiometer >= 0) pwm_arm += 10;
-			else pwm_arm -= 10;
-		}
+			cnt_ture_arm++;
+			cnt_ture_plate++;
 
-		potentiometer_old = potentiometer;
-
-		//Pass touch object
-		if(pause_time < 10 && (b_mode == 0 || b_mode == 4 || b_mode == 8 || b_mode == 12)){
-			pwm_arm = 250 - 5 * pause_time;
-			pause_time++;
-		}
-
-		return pwm_arm * 2;
-	}
-
-	void resetPause(){
-		pause_time = 0;
-	}
-
-	int pwmPlate(int potentiometer){
-		int target = 0;
-
-		if(b_mode == 12){
-			pause_time_plate++;
-			target = PLATE_TOP;
-			if(abs(PLATE_TOP - potentiometer) < 20) completed_plate = true;
-		}else{
-			pause_time_plate = 0;
-			target = PLATE_BOTTOM;
-			completed_plate = false;
-		}
-
-		pwm_plate += ((target - potentiometer) - pwm_plate) / 5;
-
-		if(pause_time_plate < 20) pwm_plate = 0;
-
-		if(abs(target - potentiometer) < 400) setLimit(pwm_plate,abs(target - potentiometer) / 2 + 50);
-
-		return pwm_plate;
-	}
-
-	int getGain(){
-		int ps3_gain = PS3_A_GAIN;
-
-		switch(b_mode){
-		case -2:
-		case -1:
-			break;
-		//Arm open
-		case 0:
-		case 4:
-		case 8:
-			ps3_gain = 1;
-			break;
-		//Get object
-		case 1:
-		case 5:
-		case 9:
-			ps3_gain = 0;
-			break;
-		//Arm close
-		case 2:
-			break;
-		case 6:
-			ps3_gain = 2;
-			break;
-		case 10:
-			ps3_gain = 1;
-			break;
-		//Release object
-		case 3:
-			break;
-		case 7:
-			ps3_gain = 2;
-			break;
-		case 11:
-			ps3_gain = 1;
-			break;
-		case 12://plate capital
-			ps3_gain = 1;
-			break;
+			switch(machine->builder_mode){
+			case -2:
+			case -1:
+				break;
+			case 0:
+			case 4:
+			case 8:
+				cnt_ture_arm = 0;
+				mainBoard->servoA.Off();//Arm open.
+				mainBoard->servoB.On();
+				mainBoard->servoC.On();
+				break;
+			case 1:
+			case 5:
+			case 9:
+				if(completed_arm == false || cnt_ture_arm < 5) break;
+				cnt_ture_arm = 0;
+				mainBoard->servoA.Off();
+				mainBoard->servoB.Off();//Get objetc
+				mainBoard->servoC.On();
+				break;
+			case 2:
+			case 6:
+			case 10:
+				cnt_ture_arm = 0;
+				mainBoard->servoA.On();//Arm close
+				mainBoard->servoB.Off();
+				mainBoard->servoC.On();
+				break;
+			case 3:
+			case 7:
+			case 11:
+				if(completed_arm == false || cnt_ture_arm < 5) break;
+				cnt_ture_arm = 0;
+				cnt_ture_plate = 0;
+				mainBoard->servoA.On();
+				mainBoard->servoB.On();//Release object
+				mainBoard->servoC.On();
+				break;
+			case 12:
+				mainBoard->servoA.Off();
+				if(completed_plate == false || cnt_ture_plate < 5) break;
+				cnt_ture_plate = 0;
+				mainBoard->servoB.On();
+				mainBoard->servoC.Off();//plate capital
+				break;
+			default:
+				machine->builder_mode = -2;
+				cnt_ture_arm = 0;
+				mainBoard->servoA.On();
+				mainBoard->servoB.On();
+				mainBoard->servoC.On();
+				break;
+			}
 		}
 
-		return ps3_gain;
-	}
+		int pwmArm(int potentiometer){
+			int target_height = 0;
 
-	int getMode(){
-		return b_mode;
-	}
+			switch(machine->builder_mode){
+			case -2:
+				target_height = HEIGHT_DEF;
+				break;
+			case -1:
+				target_height = HEIGHT_DEF + 500;
+				break;
+			//Arm open
+			case 0:
+			case 4:
+			case 8:
+				target_height = HEIGHT_STAY;
+				break;
+			//Get object
+			case 1:
+			case 5:
+			case 9:
+				target_height = HEIGHT_GET;
+				break;
+			//Arm close
+			case 2:
+				target_height = HEIGHT_OB1 + 200;
+				break;
+			case 6:
+				target_height = HEIGHT_OB2 + 200;
+				break;
+			case 10:
+				target_height = HEIGHT_OB3 + 200;
+				break;
+			//Release object
+			case 3:
+				target_height = HEIGHT_OB1;
+				break;
+			case 7:
+				target_height = HEIGHT_OB2;
+				break;
+			case 11:
+				target_height = HEIGHT_OB3;
+				break;
+			case 12://plate capital
+				target_height = HEIGHT_TOP;
+				break;
+			default:
+				break;
+			}
 
-	bool getComp(int mode){
-		if(mode == PLATE) return completed_plate;
-		else return completed_arm;
-	}
+			if(abs(target_height - potentiometer) < 15){
+				completed_arm = true;
+				pwm_arm = 50;
+			}
+			else {
+				completed_arm = false;
+				pwm_arm += ((target_height - potentiometer) - pwm_arm) / 5;
+			}
 
-	void Reset(){
-		b_mode = -2;
-		changeMode(-2);
-	}
+			if(abs(potentiometer_old - potentiometer) < 20 && completed_arm == false){
+				if(target_height - potentiometer >= 0) pwm_arm += 10;
+				else pwm_arm -= 10;
+			}
+
+			potentiometer_old = potentiometer;
+
+			//Pass touch object
+			if(pause_time < 10 && (machine->builder_mode == 0 || machine->builder_mode == 4 || machine->builder_mode == 8 || machine->builder_mode == 12)){
+				pwm_arm = 250 - 5 * pause_time;
+				pause_time++;
+			}
+
+			return pwm_arm * 2;
+		}
+
+		void resetPause(){
+			pause_time = 0;
+		}
+
+		int pwmPlate(int potentiometer){
+			int target = 0;
+
+			if(machine->builder_mode == 12){
+				pause_time_plate++;
+				target = PLATE_TOP;
+				if(abs(PLATE_TOP - potentiometer) < 20) completed_plate = true;
+			}else{
+				pause_time_plate = 0;
+				target = PLATE_BOTTOM;
+				completed_plate = false;
+			}
+
+			pwm_plate += ((target - potentiometer) - pwm_plate) / 5;
+
+			if(pause_time_plate < 20 && machine->builder_mode == 12) pwm_plate = 0;
+
+			if(abs(target - potentiometer) < 400) setLimit(pwm_plate,abs(target - potentiometer) / 2 + 50);
+
+			return pwm_plate;
+		}
+
+		int getGain(){
+			int ps3_gain = PS3_A_GAIN;
+
+			switch(machine->builder_mode){
+			case -2:
+			case -1:
+				break;
+			//Arm open
+			case 0:
+			case 4:
+			case 8:
+				ps3_gain = 1;
+				break;
+			//Get object
+			case 1:
+			case 5:
+			case 9:
+				ps3_gain = 0;
+				break;
+			//Arm close
+			case 2:
+				break;
+			case 6:
+				ps3_gain = 2;
+				break;
+			case 10:
+				ps3_gain = 1;
+				break;
+			//Release object
+			case 3:
+				break;
+			case 7:
+				ps3_gain = 2;
+				break;
+			case 11:
+				ps3_gain = 1;
+				break;
+			case 12://plate capital
+				ps3_gain = 1;
+				break;
+			}
+
+			return ps3_gain;
+		}
+
+		int getMode(){
+			return machine->builder_mode;
+		}
+
+		bool getComp(int mode){
+			if(mode == PLATE) return completed_plate;
+			else return completed_arm;
+		}
+
+		void Reset(){
+			machine->builder_mode = -2;
+			changeMode(-2);
+		}
+	};
 };
 
 
