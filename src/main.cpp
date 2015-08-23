@@ -71,8 +71,8 @@ int main(void) {
 	SensorTimer sensor_timer(&mainBoard);
 
 	Machine machine;
-	Machine::Gyro gyro(&machine);
-	Machine::Builder build(&mainBoard,&machine);
+	Gyro gyro;
+	Builder build(&mainBoard,&machine);
 
 	//Reset
 	build.Reset();
@@ -205,8 +205,8 @@ int main(void) {
 		B_out =  X_100 / 2 + Y_100 * sqrt(3) / 2 + rotation + rotation_gyro + rotation_90;
 		C_out = -X_100                           + rotation + rotation_gyro + rotation_90;
 
-		//SPI_out = -ps3con->convertValue(ps3con->getAnalog(ANALOG_R_Y),1) * 2;
-		D_out   = build.pwmArm((int)mainBoard.ad[2]->get());
+		D_out = -ps3con->convertValue(ps3con->getAnalog(ANALOG_R_Y),5);
+		SPI_out   = build.pwmArm((int)mainBoard.ad[2]->get());
 		SPI_out = build.pwmPlate((int)mainBoard.ad[3]->get());
 
 		setLimitFloat(A_out,PWM_LIMIT);
