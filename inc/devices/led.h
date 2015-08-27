@@ -28,7 +28,7 @@ public:
 		pin.reset();
 	}
 
-	void Flash() {
+	void flash() {
 		On();
 		MillisecondTimer::delay(100);
 		Off();

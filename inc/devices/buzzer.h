@@ -8,7 +8,8 @@ namespace stm32plus {
 template<class TimBuzzer, class ChannelA, class ChannelB>
 class Buzzer: TimBuzzer {
 public:
-	int MAX_COMPARE = 6;
+	int MAX_COMPARE = 6,
+		cnt_time    = 0;
 	/*
 	 enum {
 	 MAX_COMPARE = 6
@@ -48,6 +49,12 @@ public:
 
 	inline void stop() {
 		set(0, 6);
+	}
+
+	void flash(){
+		if(cnt_time == 0) set(-1, 3);
+		if(cnt_time > 10) cnt_time = -1;
+		cnt_time++;
 	}
 };
 }

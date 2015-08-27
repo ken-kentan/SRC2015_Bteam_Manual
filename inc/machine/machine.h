@@ -15,20 +15,27 @@
 #define GYRO_P         10 //base 17
 #define GYRO_D          2
 
-#define HEIGHT_DEF   2600
-#define HEIGHT_TOP   3667
-#define HEIGHT_STAY  2200
-#define HEIGHT_GET   1890
-#define HEIGHT_OB1   2900
-#define HEIGHT_OB2   3270
-#define HEIGHT_OB3   3650
+#define DISTANCE_BIG   900
+#define DISTANCE_SMALL 900
+#define DISTANCE_GET     900
+#define DISTANCE_PUSH    900
 
-#define PLATE_TOP    1900
-#define PLATE_BOTTOM 800
+#define HEIGHT_DEF    880
+#define HEIGHT_TOP   2000
+#define HEIGHT_STAY   600
+#define HEIGHT_GET    200
+#define HEIGHT_OB1   1150
+#define HEIGHT_OB2   1550
+#define HEIGHT_OB3   1950
+#define HEIGHT_BIG   2000
+
+#define PLATE_TOP     250
+#define PLATE_BOTTOM 1300
 
 #define PS3_A_GAIN      3
 
 #define NO_CAHNGE     999
+
 
 void setLimit(int &value,int limit);
 void setLimitFloat(float &value,float limit);
@@ -39,14 +46,15 @@ enum{
 	TURN_RIGHT =  1,
 	X          =  0,
 	Y              ,
+	ROTATE         ,
 	ARM        =  0,
 	PLATE
 };
 
-class Machine {
+class Machine{
 
 private:
-	int anti_slip[2]  = {},
+	int anti_slip[3]  = {},
 	    auto_runXY[2] = {},
 		target_loc[2] = {},
 		XY_100        = 0;
@@ -61,20 +69,20 @@ private:
 	Encoder enc;
 
 public:
-	int antiSlip(int XY_100,int mode) {
-		int acc_rate = 5;
+	int antiSlip(int XY_100,int mode,int builder_mode) {
+		float acc_rate = 5;
 
 		if (XY_100 == 0) acc_rate = 3;
 		else             acc_rate = 5;
 
-		switch(acc_rate){
+		switch(builder_mode){
 		case 0:
 		case 4:
 		case 8:
 		case 10:
 		case 11:
 		case 12:
-			acc_rate = 1;
+			acc_rate = 1.5;
 			break;
 		case 6:
 		case 7:
@@ -82,7 +90,7 @@ public:
 			break;
 		}
 
-		anti_slip[mode] += (XY_100 - anti_slip[mode]) / acc_rate;
+		anti_slip[mode] += ((float)XY_100 - anti_slip[mode]) / acc_rate;
 
 		return anti_slip[mode];
 	}
@@ -92,7 +100,7 @@ public:
 
 		target_distance = enc.value[mode] - target_loc[mode];
 
-		if (abs(target_distance) >= 10) {
+		if (std::abs(target_distance) >= 10) {
 			if (checkMove(mode) == false) {
 				if      (auto_runXY[mode] < 0) auto_runXY[mode] -= 35;
 				else if (auto_runXY[mode] > 0) auto_runXY[mode] += 35;
@@ -113,9 +121,27 @@ public:
 	}
 
 	//Automatically adjust the distance between the object
-	int adjustDistance(int distance,int target,int mode){
+	int adjustDistance(int distance,int build_mode,int mode){
+		int target = 0;
+		switch(build_mode){
+		case -2:
+		case -1:
+			if(mode == X) target = DISTANCE_GET;
+			break;
+		case 0:
+			if(mode == Y) target = DISTANCE_BIG;
+			break;
+		case 4:
+		case 8:
+			if(mode == Y) target = DISTANCE_SMALL;
+			break;
+		case 10:
+		case 11:
+			if(mode == X) target = DISTANCE_PUSH;
+			break;
+		}
 
-		if (abs(distance - target) > 25) {
+		if (std::abs(distance - target) > 25) {
 			XY_100 = (distance - target) / 3;
 
 			if(checkMove(mode) == false){
@@ -150,7 +176,7 @@ public:
 	bool checkMove(int mode){
 		bool check = false;
 
-		if(abs(enc.diff[mode]) > 10) check = true;
+		if(std::abs(enc.diff[mode]) > 10) check = true;
 
 		return check;
 	}
@@ -158,7 +184,9 @@ public:
 
 class Gyro {
 private:
-	int   count_180     = 0;
+	int count_180    = 0,
+		target_angle = 0,
+		rotation     = 0;
 
 	bool first_time = true;
 
@@ -177,10 +205,10 @@ public:
 
 	void set(float yaw_now,float yaw_old){
 
-		if (abs(yaw_now - yaw_old) > 0.04){
+		if (std::abs(yaw_now - yaw_old) > 0.04){
 			yaw.old = yaw.value;
 
-			if(abs(yaw_now + yaw_old) < 20 && abs(yaw_now) > 150){
+			if(std::abs(yaw_now + yaw_old) < 20 && std::abs(yaw_now) > 150){
 
 				if(yaw_old > 150)       count_180++;
 				else if(yaw_old < -150) count_180--;
@@ -192,7 +220,12 @@ public:
 		}
 	}
 
-	int angle90(int mode){
+	void setAngle90(int angle){
+		target_angle -= angle;
+		if(target_angle == 0)target_angle = 1;
+	}
+
+/*	int angle90(){
 		int rotation_90 = 0;
 
 		if(first_time == true){
@@ -200,30 +233,36 @@ public:
 			first_time = false;
 		}
 
-		if(abs(yaw.value - yaw.old_90d) < 20) yaw.value_90d += abs(yaw.value - yaw.old_90d);
+		if(std::abs(yaw.value - yaw.old_90d) < 20) yaw.value_90d += std::abs(yaw.value - yaw.old_90d);
 
-		if(yaw.value_90d < 90) rotation_90 = 120 - yaw.value_90d;
-		else                 rotation_90 = 0;
+		if(yaw.value_90d < target_angle) rotation_90 = 120 - yaw.value_90d;
+		else{
+			resetAngle90();
+			rotation_90 = 0;
+		}
 
 		yaw.old_90d = yaw.value;
 
-		if(mode == TURN_LEFT) rotation_90 *= -1;
+		if(mode_angle == TURN_LEFT) rotation_90 *= -1;
+
+		setLimit(rotation_90,300);
 
 		return rotation_90;
 	}
 
-	void resetAngle90(){
+ 	void resetAngle90(){
 		first_time = true;
+		target_angle = 0;
 		yaw.value_90d = 0;
 	}
-
+*/
 	int correct(){
 		int rotation_  = 0,
 			rotation_P = 0,
 			rotation_D = 0;
 
-		rotation_P = (yaw.value - yaw.offset) * GYRO_P;
-		rotation_D = (yaw.value - yaw.old) * GYRO_D;
+		rotation_P = ((yaw.value - yaw.offset) - target_angle) * GYRO_P;
+		//rotation_D = (yaw.value - yaw.old) * GYRO_D;
 
 		rotation_ = rotation_P + rotation_D;
 
@@ -232,12 +271,29 @@ public:
 			else if (rotation_ < 0) rotation_ -= 0;
 		}
 
-		return rotation_;
+		if(target_angle != 0){
+			setLimit(rotation_,80);
+			rotation += (rotation_ - rotation) / 6;
+			if(std::abs(rotation_) < 50){
+				rotation = rotation_;
+				if(target_angle == 1)target_angle = 0;
+			}
+			setLimit(rotation,100);
+		}else{
+			rotation = rotation_;
+		}
+
+		return rotation;
 	}
 
-	void reset(int &rotation){
+	int getAngle(){
+		return target_angle;
+	}
+
+	void reset(int &rotation_g){
 		yaw.offset = yaw.value;
-		rotation = 0;
+		target_angle = 0;
+		rotation_g = 0;
 	}
 };
 
@@ -250,7 +306,8 @@ private:
 		pwm_arm           =  0,
 		pwm_plate         =  0,
 		pause_time        =  0,
-		pause_time_plate  =  0;
+		pause_time_plate  =  0,
+		release_big       =  0;
 
 	bool completed_arm   = false,
 		 completed_plate = false;
@@ -275,15 +332,38 @@ public:
 		cnt_ture_arm++;
 		cnt_ture_plate++;
 
+		if((mode != -6 && mode != 12) || completed_plate == true) pause_time_plate = 0;
+
 		switch(mode){
-		case -2:
+		case -6:
 		case -1:
+			mainBoard->servoA.On();//def
+			mainBoard->servoB.On();
+			mainBoard->servoC.On();
 			break;
+		case -5:
 		case 0:
 		case 4:
 		case 8:
 			cnt_ture_arm = 0;
 			mainBoard->servoA.Off();//Arm open.
+			mainBoard->servoB.On();
+			mainBoard->servoC.On();
+			break;
+		case -4:
+			if(completed_arm == false || cnt_ture_arm < 5) break;
+			cnt_ture_arm = 0;
+			mainBoard->servoA.On();//Get BIG
+			mainBoard->servoB.On();
+			mainBoard->servoC.Off();
+			break;
+		case -3:
+			cnt_ture_arm = 0;
+			break;
+		case -2:
+			if(completed_arm == false || cnt_ture_arm < 5) break;
+			cnt_ture_arm = 0;
+			mainBoard->servoA.Off();//Release BIG
 			mainBoard->servoB.On();
 			mainBoard->servoC.On();
 			break;
@@ -322,7 +402,7 @@ public:
 			mainBoard->servoC.Off();//plate capital
 			break;
 		default:
-			mode = -2;
+			mode = -6;
 			cnt_ture_arm = 0;
 			mainBoard->servoA.On();
 			mainBoard->servoB.On();
@@ -331,31 +411,47 @@ public:
 		}
 	}
 
+	void releaseBIG(){
+		if(release_big == 0)release_big = 1;
+	}
+
+	int getStatusBIG(){
+		return release_big;
+	}
+
 	int pwmArm(int potentiometer){
 		int target_height = 0;
 
 		switch(mode){
-		case -2:
-			target_height = HEIGHT_DEF;
+		case -6:
+			target_height = HEIGHT_DEF + 400;
 			break;
 		case -1:
-			target_height = HEIGHT_DEF + 500;
+			target_height = HEIGHT_DEF + 300;
 			break;
 		//Arm open
+		case -5:
 		case 0:
 		case 4:
 		case 8:
 			target_height = HEIGHT_STAY;
 			break;
 		//Get object
+		case -4:
 		case 1:
 		case 5:
 		case 9:
 			target_height = HEIGHT_GET;
 			break;
 		//Arm close
+		case -3:
+			target_height = HEIGHT_BIG;
+			break;
+		case -2:
+			target_height = HEIGHT_BIG - 200;
+			break;
 		case 2:
-			target_height = HEIGHT_OB1 + 200;
+			target_height = HEIGHT_OB1 + 500;
 			break;
 		case 6:
 			target_height = HEIGHT_OB2 + 200;
@@ -380,7 +476,7 @@ public:
 			break;
 		}
 
-		if(abs(target_height - potentiometer) < 15){
+		if(std::abs(target_height - potentiometer) < 15){
 			completed_arm = true;
 			pwm_arm = 50;
 		}
@@ -389,18 +485,20 @@ public:
 			pwm_arm += ((target_height - potentiometer) - pwm_arm) / 5;
 		}
 
-		if(abs(potentiometer_old - potentiometer) < 20 && completed_arm == false){
+		if(std::abs(potentiometer_old - potentiometer) < 20 && completed_arm == false){
 			if(target_height - potentiometer >= 0) pwm_arm += 10;
-			else pwm_arm -= 10;
+			else                                   pwm_arm -= 10;
 		}
 
 		potentiometer_old = potentiometer;
 
 		//Pass touch object
-		if(pause_time < 10 && (mode % 4 == 0)){ //builder_mode:0,4,8,12
+		if(pause_time < 10 && (mode == 0 || mode == 4 || mode == 8|| mode == -5)){ //builder_mode:0,4,8,12
 			pwm_arm = 250 - 5 * pause_time;
 			pause_time++;
 		}
+
+		setLimit(pwm_arm,(HEIGHT_TOP - potentiometer) + 150);
 
 		return pwm_arm * 2;
 	}
@@ -414,23 +512,24 @@ public:
 
 		if(mode == 12){
 			target = PLATE_TOP;
-			if(abs(PLATE_TOP - potentiometer) < 20) completed_plate = true;
+			if(std::abs(PLATE_TOP - potentiometer) < 50) completed_plate = true;
 		}else{
 			target = PLATE_BOTTOM;
 			completed_plate = false;
 		}
 
-		pwm_plate += ((target - potentiometer) - pwm_plate) / 5;
+		if(pause_time_plate < 25) pause_time_plate++;
 
-		if(pause_time_plate < 20) pwm_plate = 0;
+		//pwm_plate -= ((target - potentiometer) - pwm_plate) / 5;
+		pwm_plate -= (target - potentiometer);
 
-		if(abs(target - potentiometer) < 400){
-			setLimit(pwm_plate,abs(target - potentiometer) / 2 + 50);
-			pause_time_plate = 0;
+		if(pause_time_plate < 20 && (mode == 12 || mode == -6)) pwm_plate = 0;
+
+		if(std::abs(target - potentiometer) < 400){
+			setLimit(pwm_plate,(std::abs(target - potentiometer) / 2) + 20);
 		}
-		else if(pause_time_plate < 25){
-			pause_time_plate++;
-		}
+
+		setLimit(pwm_plate,150);
 
 		return pwm_plate;
 	}
@@ -439,16 +538,20 @@ public:
 		int ps3_gain = PS3_A_GAIN;
 
 		switch(mode){
+		case -6:
 		case -2:
 		case -1:
 			break;
 		//Arm open
+		case -5:
+		case -3:
 		case 0:
 		case 4:
 		case 8:
 			ps3_gain = 1;
 			break;
 		//Get object
+		case -4:
 		case 1:
 		case 5:
 		case 9:
@@ -490,8 +593,8 @@ public:
 	}
 
 	void Reset(){
-		mode = -2;
-		changeMode(-2);
+		mode = -6;
+		changeMode(-6);
 	}
 };
 
