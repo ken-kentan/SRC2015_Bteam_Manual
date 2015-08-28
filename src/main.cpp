@@ -30,13 +30,12 @@ using namespace stm32plus;
 #define SPEED_Linearly  100
 #define PWM_LIMIT       500
 
-//#define debug cout
-
 
 int main(void) {
 	int enc_now[2]   = {},
 		enc_old[2]   = {},
-		push_time[2] = {};
+		push_time[3] = {},
+		_build_mode  =  0;
 
 	float yaw_now   = 0,
 		  yaw_old   = 0;
@@ -170,22 +169,42 @@ int main(void) {
 		machine.antiSlip(rotation,ROTATE,NO_CAHNGE);
 		setLimit(rotation,R_LIMIT);
 
-		//Build capital (push_time)
-		if(ps3con->getButtonPress(CIRCLE) && push_time[1] == 0){
+		//change manual build mode
+		if(ps3con->getButtonPress(SELECT) && push_time[1] == 0){
 			mainBoard.buzzer.set(-1, 5);
 			push_time[1] = 1;
-			if(build.getMode() == -2 && build.getStatusBIG() == 0) build.releaseBIG();
-			else build.changeMode();
+			if(_build_mode == AUTO){
+				_build_mode = MANUAL;
+				build.changeMode(-2);
+			}
+			else{
+				_build_mode = AUTO;
+				build.changeMode(-6);
+			}
+		}
+
+		//Build capital (push_time)
+		if(ps3con->getButtonPress(CIRCLE) && push_time[2] == 0){
+			mainBoard.buzzer.set(-1, 5);
+			push_time[2] = 1;
+
+			if(_build_mode == AUTO){
+				build.changeMode();
+			}else if(_build_mode == MANUAL){
+				if(build.getMode() == -2) build.changeMode(1);//Get
+				else                     build.changeMode(-2);//Release
+			}
+
 			build.resetPause();
-		}else if(ps3con->getButtonPress(CROSS) && push_time[1] == 0){
+		}else if(ps3con->getButtonPress(CROSS) && push_time[2] == 0 && _build_mode == AUTO){
 			mainBoard.buzzer.set(-1, 4);
-			push_time[1] = 1;
+			push_time[2] = 1;
 			build.changeMode(build.getMode() - 1);
 			build.resetPause();
 		}
 		build.changeMode(NO_CAHNGE);
 
-		for(int i = 0;i < 2;i++){
+		for(int i = 0;i < 3;i++){
 			if(push_time[i] != 0){
 				push_time[i]++;
 				if(push_time[i] > 10) push_time[i] = 0;
@@ -232,16 +251,25 @@ int main(void) {
 		B_out =  X_100 / 2 + Y_100 * sqrt(3) / 2 + rotation + rotation_gyro;
 		C_out = -X_100                           + rotation + rotation_gyro;
 
-		//int test = 0;
-		//SPI_out = -ps3con->convertValue(ps3con->getAnalog(ANALOG_R_Y),5);
-		D_out = build.pwmArm((int)mainBoard.ad[2]->get());
-		SPI_out = build.pwmPlate((int)mainBoard.ad[3]->get());
+		//switch Arm & Plate mode
+		if(_build_mode == AUTO){
+			D_out   = build.pwmArm((int)mainBoard.ad[2]->get());
+			SPI_out = build.pwmPlate((int)mainBoard.ad[3]->get());
+		}else{
+			int dust = 0;//no function
+			dust = build.pwmArm((int)mainBoard.ad[2]->get());
+			dust = build.pwmPlate((int)mainBoard.ad[3]->get());
+			D_out = -ps3con->convertValue(ps3con->getAnalog(ANALOG_R_Y),5);
+		}
+		//debug
+		//SPI_out  = -ps3con->convertValue(ps3con->getAnalog(ANALOG_R_Y),2);
+		//D_out  = -ps3con->convertValue(ps3con->getAnalog(ANALOG_R_Y),5);
 
 		setLimitFloat(A_out,PWM_LIMIT);
 		setLimitFloat(B_out,PWM_LIMIT);
 		setLimitFloat(C_out,PWM_LIMIT);
 		setLimit(D_out,PWM_LIMIT);
-		setLimit(SPI_out,120);
+		setLimit(SPI_out,110);
 
 		//PWM output
 		mainBoard.motorA.setOutput(A_out / 500.0);
@@ -256,10 +284,10 @@ int main(void) {
 
 		//debug
 		char str[128];
-//			sprintf(str, "[DEBUG]Mode:%d Arm,Plate:%s,%s PS3con:%d,%d omniPWM:%.0f,%.0f,%.0f Gyro:%d Rotate:%d [TEST]%d %d\r\n"
-//				,build.getMode(),build.getComp(ARM)?"O":"X",build.getComp(PLATE)?"O":"X"
-//						,X_100,Y_100,A_out,B_out,C_out,rotation_gyro,rotation,(int)mainBoard.ad[3]->get(),SPI_out);
-		sprintf(str,"[TEST]%d %d\r\n",(int)mainBoard.ad[3]->get(),SPI_out);
+			sprintf(str, "[DEBUG]Mode:%d,%d Arm,Plate:%s,%s PS3con:%d,%d omniPWM:%.0f,%.0f,%.0f Gyro:%d Rotate:%d Arm:%d Plate:%d\r\n"
+				,build.getMode(),_build_mode,build.getComp(ARM)?"O":"X",build.getComp(PLATE)?"O":"X"
+						,X_100,Y_100,A_out,B_out,C_out,rotation_gyro,rotation,(int)mainBoard.ad[2]->get(),(int)mainBoard.ad[3]->get());
+		//sprintf(str,"[TEST]%d %d\r\n",(int)mainBoard.ad[3]->get(),SPI_out);
 		//sprintf(str,"[TEST]Front:%d Left:%d\r\n",(int)mainBoard.ad[0]->get(),(int)mainBoard.ad[1]->get());
 		debug << str;
 

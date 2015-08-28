@@ -29,8 +29,8 @@
 #define HEIGHT_OB3   1950
 #define HEIGHT_BIG   2000
 
-#define PLATE_TOP     250
-#define PLATE_BOTTOM 1300
+#define PLATE_TOP     314
+#define PLATE_BOTTOM 1370
 
 #define PS3_A_GAIN      3
 
@@ -48,7 +48,9 @@ enum{
 	Y              ,
 	ROTATE         ,
 	ARM        =  0,
-	PLATE
+	PLATE          ,
+	AUTO       =  0,
+	MANUAL
 };
 
 class Machine{
@@ -306,8 +308,7 @@ private:
 		pwm_arm           =  0,
 		pwm_plate         =  0,
 		pause_time        =  0,
-		pause_time_plate  =  0,
-		release_big       =  0;
+		pause_time_plate  =  0;
 
 	bool completed_arm   = false,
 		 completed_plate = false;
@@ -337,7 +338,7 @@ public:
 		switch(mode){
 		case -6:
 		case -1:
-			mainBoard->servoA.On();//def
+			mainBoard->servoA.On();//Home position
 			mainBoard->servoB.On();
 			mainBoard->servoC.On();
 			break;
@@ -372,8 +373,8 @@ public:
 		case 9:
 			if(completed_arm == false || cnt_ture_arm < 5) break;
 			cnt_ture_arm = 0;
-			mainBoard->servoA.Off();
-			mainBoard->servoB.Off();//Get objetc
+			mainBoard->servoA.Off();//Get objetc
+			mainBoard->servoB.Off();
 			mainBoard->servoC.On();
 			break;
 		case 2:
@@ -390,16 +391,16 @@ public:
 			if(completed_arm == false || cnt_ture_arm < 5) break;
 			cnt_ture_arm = 0;
 			cnt_ture_plate = 0;
-			mainBoard->servoA.On();
-			mainBoard->servoB.On();//Release object
+			mainBoard->servoA.On();//Release object
+			mainBoard->servoB.On();
 			mainBoard->servoC.On();
 			break;
 		case 12:
 			mainBoard->servoA.Off();
 			if(completed_plate == false || cnt_ture_plate < 5) break;
 			cnt_ture_plate = 0;
-			mainBoard->servoB.On();
-			mainBoard->servoC.Off();//plate capital
+			mainBoard->servoB.On(); //plate capital
+			mainBoard->servoC.Off();
 			break;
 		default:
 			mode = -6;
@@ -411,13 +412,13 @@ public:
 		}
 	}
 
-	void releaseBIG(){
-		if(release_big == 0)release_big = 1;
-	}
-
-	int getStatusBIG(){
-		return release_big;
-	}
+//	void releaseBIG(){
+//		if(release_big == 0)release_big = 1;
+//	}
+//
+//	int getStatusBIG(){
+//		return release_big;
+//	}
 
 	int pwmArm(int potentiometer){
 		int target_height = 0;
@@ -512,7 +513,7 @@ public:
 
 		if(mode == 12){
 			target = PLATE_TOP;
-			if(std::abs(PLATE_TOP - potentiometer) < 50) completed_plate = true;
+			if(std::abs(PLATE_TOP - potentiometer) < 60) completed_plate = true;
 		}else{
 			target = PLATE_BOTTOM;
 			completed_plate = false;
